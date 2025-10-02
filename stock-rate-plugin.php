@@ -107,14 +107,16 @@ function navigator_bar_render() {
         $class = $changePct == 0 ? "unchanged" : ($changePct > 0 ? "up" : "down");
         // Format with exactly one decimal place
         $formattedChange = number_format($changePct, 2);
+        $signChange = $changePct == 0 ? "" : ($changePct > 0 ? "+" : "");
 
         echo "
-            <div class='stock-box {$class}'>
+            <div class='stock-box'>
             NAVIG
                 <span class='price'>{$lastClose} HUF
-                    <span class='navi-tooltiptext'>({$lastPrices['date']})</span>
+                    <span class='navi-tooltiptext'></span>
                 </span>
-                <span class='change'>{$arrow} " . $formattedChange . "%</span>
+                <span class='change {$class}'>{$arrow}</span>
+                <span class='changepercent'> {$signChange}{$formattedChange}%</span>
             </div>
         ";
     } else {
@@ -150,6 +152,7 @@ function navigator_bar_styles() {
             margin-left: 5px;
             position: relative; /* a tooltip igazításához kell */
             cursor: pointer;
+            font-weight: normal;
         }
 
         /* Tooltip szöveg */
@@ -179,13 +182,17 @@ function navigator_bar_styles() {
             opacity: 1 !important;
         }
 
-        .stock-box.up .change {
+        .stock-box .changepercent {
+            font-weight: normal;
+        }
+
+        .stock-box .change.up {
             color: green;
         }
-        .stock-box.down .change {
+        .stock-box .change.down {
             color: red;
         }
-        .stock-box.unchanged .change {
+        .stock-box .change.unchanged {
             color: #B4C7E8;
         }
 
