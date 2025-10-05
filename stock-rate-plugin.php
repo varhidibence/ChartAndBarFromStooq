@@ -120,7 +120,7 @@ function navigator_bar_render() {
             </div>
         ";
     } else {
-        echo "<div class='stock-box error'>Invalid price data</div>";
+        echo "<div class='stock-box error'>NAVIG</div>";
     }
     
     //$row = get_actual_rates();
