@@ -152,21 +152,16 @@ function my_huf_chart_shortcode() {
             const openPricesHalfYear = lastHalfYearData.map(row => parseFloat(row.Close));
             const closePricesHalfYear = lastHalfYearData.map(row => parseFloat(row.Close));
 
+            const lineColor = '#254867';
+
             const dataLastMonth = {
                     labels:  labelsLastMonth, //['2025-09-20', '2025-09-21', '2025-09-22', '2025-09-23'],
                     datasets: [
                         {
                             label: 'Záró ár (Close)',
                             data: closePricesLastMonth,
-                            backgroundColor: 'rgba(54, 162, 235, 0.5)',
-                            borderColor: 'rgba(54, 162, 235, 1)',
-                            borderWidth: 1
-                        },
-                                                {
-                            label: 'Nyitó ár (Open)',
-                            data: openPricesLastMonth,
-                            backgroundColor: 'rgba(235, 142, 54, 0.5)',
-                            borderColor: 'rgba(211, 177, 23, 1)',
+                            backgroundColor: lineColor,
+                            borderColor: lineColor,
                             borderWidth: 1
                         }
                     ]
@@ -178,15 +173,8 @@ function my_huf_chart_shortcode() {
                         {
                             label: 'Záró ár (Close)',
                             data: closePricesAll,
-                            backgroundColor: 'rgba(54, 162, 235, 0.5)',
-                            borderColor: 'rgba(54, 162, 235, 1)',
-                            borderWidth: 1
-                        },
-                                                {
-                            label: 'Nyitó ár (Open)',
-                            data: openPricesAll,
-                            backgroundColor: 'rgba(235, 142, 54, 0.5)',
-                            borderColor: 'rgba(211, 177, 23, 1)',
+                            backgroundColor: lineColor,
+                            borderColor: lineColor,
                             borderWidth: 1
                         }
                     ]
@@ -198,14 +186,9 @@ function my_huf_chart_shortcode() {
                         {
                             label: 'Záró ár (Close)',
                             data: closePricesYTD,
-                            backgroundColor: 'rgba(54, 162, 235, 0.5)',
-                            borderColor: 'rgba(54, 162, 235, 1)',
-                        },
-                                                {
-                            label: 'Nyitó ár (Open)',
-                            data: openPricesYTD,
-                            backgroundColor: 'rgba(235, 142, 54, 0.5)',
-                            borderColor: 'rgba(211, 177, 23, 1)',
+                            backgroundColor: lineColor,
+                            borderColor: lineColor,
+                            borderWidth: 1
                         }
                     ]
             };
@@ -216,14 +199,9 @@ function my_huf_chart_shortcode() {
                         {
                             label: 'Záró ár (Close)',
                             data: closePricesHalfYear,
-                            backgroundColor: 'rgba(54, 162, 235, 0.5)',
-                            borderColor: 'rgba(54, 162, 235, 1)',
-                        },
-                                                {
-                            label: 'Nyitó ár (Open)',
-                            data: closePricesHalfYear,
-                            backgroundColor: 'rgba(235, 142, 54, 0.5)',
-                            borderColor: 'rgba(211, 177, 23, 1)',
+                            backgroundColor: lineColor,
+                            borderColor: lineColor,
+                            borderWidth: 1
                         }
                     ]
             };
@@ -268,6 +246,9 @@ function my_huf_chart_shortcode() {
                     }
                 }
             });
+
+            Chart.defaults.backgroundColor = 'rgba(49, 64, 64, 1)'; // '#314040ff';
+
 
             const formatFullDate = function(value) {
                 return this.getLabelForValue(value); // full date

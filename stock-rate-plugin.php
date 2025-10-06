@@ -44,8 +44,11 @@ function get_actual_rates() {
     return $firstRow;
  }
 
- function getLastPriceWithDate($symbol = 'navigator.hu') {
-    $url = "https://stooq.com/q/d/l/?s={$symbol}&i=d";
+function getChangeOfLastTwoDays($symbol = 'navigator.hu') {
+    $oneMonthAgo = date('Ymd', strtotime('-1 month'));
+    $today = date('Ymd');
+
+    $url = "https://stooq.com/q/d/l/?s={$symbol}&d1={$oneMonthAgo}&d2={$today}&i=d";
     $csv_data = StockDataHelper::fetchUrl($url);
     
     if ($csv_data === false) {
@@ -79,30 +82,47 @@ function get_actual_rates() {
         $changePct = null;
     }
 
+    return $changePct;
+}
+
+
+ function getLastPriceWithDate($symbol = 'navigator.hu') {
+    $url = "https://stooq.com/q/l/?s={$symbol}&f=sd2t2ohlcv&h&e=csv";
+    $csv_data = StockDataHelper::fetchUrl($url);
+    
+    if ($csv_data === false) {
+        return null; // could not fetch
+    }
+
+    $lines = explode("\n", trim($csv_data));
+
+    // First line = headers, last non-empty line = most recent row
+    $dataRow = str_getcsv($lines[1]);
+    $headers = str_getcsv($lines[0]);
+
+    $lastData = array_combine($headers, $dataRow);
+    $lastClose = (float)($lastData['Close'] ?? 0);
+
     return [
         'date'       => $lastData['Date'] ?? null,
-        'close'      => $lastClose,
-        'prev_date'  => $prevData['Date'] ?? null,
-        'prev_close' => $prevClose,
-        'change_pct' => $changePct,
+        'time'       => $lastData['Time'] ?? null,
+        'close'      => $lastClose
     ];
 }
 
 function navigator_bar_render() {
   
     $lastPrices = getLastPriceWithDate('navigator.hu');
-    $json_data = json_encode($lastPrices);
-    //echo "<div>$json_data</div>";
+    $changePct = getChangeOfLastTwoDays();
     
     if ($lastPrices) {
         $lastClose = (float)($lastPrices['close'] ?? 0);
-        $prevClose = (float)($lastPrices['prev_close'] ?? 0);
+        $date = $lastPrices['date'] ?? null;
+        $time = $lastPrices['time'] ?? null;
 
         if (true) {
             echo "<div class='stock-box error'>NAVIG</div>";
         }
-
-        $changePct = $lastPrices['change_pct'];
         $arrow = $changePct == 0 ? "-" : ($changePct > 0 ? "▲" : "▼");
         $class = $changePct == 0 ? "unchanged" : ($changePct > 0 ? "up" : "down");
         // Format with exactly one decimal place
@@ -110,10 +130,9 @@ function navigator_bar_render() {
         $signChange = $changePct == 0 ? "" : ($changePct > 0 ? "+" : "");
 
         echo "
-            <div class='stock-box'>
-            NAVIG
+            <div class='stock-box'>NAVIG
                 <span class='price'>{$lastClose} HUF
-                    <span class='navi-tooltiptext'></span>
+                    <span class='navi-tooltiptext'>{$date} {$time}</span>
                 </span>
                 <span class='change {$class}'>{$arrow}</span>
                 <span class='changepercent'> {$signChange}{$formattedChange}%</span>
@@ -156,7 +175,7 @@ function navigator_bar_styles() {
         }
 
         /* Tooltip szöveg */
-        .stock-box .price .tooltiptext {
+        .stock-box .price .navi-tooltiptext {
             visibility: hidden;
             background-color: rgba(0,0,0,0.85);
             color: #fff;
@@ -173,11 +192,11 @@ function navigator_bar_styles() {
 
             opacity: 0;
             transition: opacity 0.3s;
-            z-index: 9999 !important; /* mindig a top bar fölött legyen */
+            z-index: 9999; /* mindig a top bar fölött legyen */
         }
 
         /* Hover állapot */
-        .stock-box .price:hover > .tooltiptext {
+        .stock-box .price:hover > .navi-tooltiptext {
             visibility: visible !important;
             opacity: 1 !important;
         }
