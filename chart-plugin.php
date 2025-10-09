@@ -3,7 +3,7 @@
 Plugin Name: NAVIGATOR stock rate chart plugin
 Description: A simple plugin that shows a chart with Chart.js.
 Version: 1.0
-Author: Benve Várhidi
+Author: Bence Várhidi
 */
 
 require_once WP_PLUGIN_DIR . '/chart-plugin/StockDataHelper.php';
@@ -97,6 +97,7 @@ function fetchYTDData(){
     wp_add_inline_script('chartjs', 'console.log("Fetching data (YTD):", ' . json_encode($url) . ');');
     
     $csv_data = StockDataHelper::fetchUrl($url);
+    //die("Nincsen megjelníthető adat");
     if ($csv_data === false) {
         die("Nem sikerült lekérni az adatokat. url: {$url}");
     }
@@ -113,23 +114,71 @@ function my_huf_chart_shortcode() {
     $YTDData = fetchYTDData();
     $lastHalfYearData = fetchLastSixMonthData();
 
+    $latestStockData = StockDataHelper::getLastPriceWithDate();
+    $changePct = StockDataHelper::getChangeOfLastTwoDays();
+    
+    $latestPrice = $latestStockData["close"] ?? "-";
+    $latestDate = $latestStockData["date"] ?? "-";
+    $formattedDate = $latestDate != null ? date('Y.m.d', strtotime($latestDate)) : "-";
+    $latestTime = $latestStockData["time"] ?? "-";
+    
+    
+    $arrow = $changePct == 0 ? "-" : ($changePct > 0 ? "▲" : "▼");
+    $class = $changePct == 0 ? "unchanged" : ($changePct > 0 ? "up" : "down");
+    // Format with exactly one decimal place
+    $formattedChange = number_format($changePct, 2);
+    $signChange = $changePct == 0 ? "" : ($changePct > 0 ? "+" : "");
+
     ob_start(); ?>
 
-    <div class="chart-container">
-        <canvas id="hufChart" width="400" height="200"></canvas>
-        <div class="chart-controls">
-            <button id="btn-month">Utolsó hónap</button>
-            <button id="btn-half-year">6 hónap</button>
-            <button id="btn-year" class="active">Éves</button>
-            <button id="btn-all">Teljes</button>
-        </div>
-        
+    <div class="container my-4">
+        <div class="row align-items-start">
+            <!-- Table -->
+            <div class="navigator-table col-12 col-md-4 mb-3 mb-md-0">
+                <div class="table-main-data">
+                    <span class='price'><?php echo esc_html($latestPrice); ?> HUF </span>
+                    <span class='navi-tooltiptext'>
+                        <?php echo esc_html($formattedDate); ?> 
+                        <?php echo esc_html($latestTime); ?>
+                    </span>
+
+                    <span class='change {$class}'><?php echo esc_html($arrow); ?></span>
+                    <span class='changepercent'> 
+                        <?php echo esc_html($signChange); ?>
+                        <?php echo esc_html($formattedChange); ?> %
+                    </span>
+                </div>
+                <table class="table table-bordered table-sm">
+                    <thead class="table-light">
+                    </thead>
+                        <tbody>
+                            <tr><td>Adat 1</td><td>123</td></tr>
+                            <tr><td>Adat 2</td><td>456</td></tr>
+                            <tr><td>Adat 3</td><td>789</td></tr>
+                            <tr><td>Adat 4</td><td>234</td></tr>
+                            <tr><td>Adat 5</td><td>567</td></tr>
+                            <tr><td>Adat 6</td><td>890</td></tr>
+                        </tbody>
+                </table>
+            </div>
+
+            <!-- Chart -->
+            <div class="col-12 col-md-8">
+                <div class="chart-container">
+                    <canvas id="hufChart" width="400" height="200"></canvas>
+                    <div class="chart-controls">
+                        <button id="btn-month">Utolsó hónap</button>
+                        <button id="btn-half-year">6 hónap</button>
+                        <button id="btn-year" class="active">Éves</button>
+                        <button id="btn-all">Teljes</button>
+                    </div>
+                </div>
+            </div>
     </div>
-    
     
     <script>
 
-        console.log("My HUF Chart plugin shortcode was loaded ✅");
+        console.log("NAVIGATOR HUF Chart plugin was loaded ✅");
 
         document.addEventListener("DOMContentLoaded", function () {
             const lastMonthData = <?php echo $lastMonthData; ?>;
@@ -309,6 +358,18 @@ function my_huf_chart_shortcode() {
 
 function navigator_chart_styles() {
       echo '<style>
+
+        .navigator-table {
+            font-family: arial, sans-serif;
+            font-weight: bold;
+        }
+        .table-main-data {
+            display: flex;
+            justify-content: center;
+            padding: 10px;
+
+        }
+        
         .chart-controls {
             display: flex;
             justify-content: end;

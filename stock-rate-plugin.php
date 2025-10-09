@@ -44,76 +44,12 @@ function get_actual_rates() {
     return $firstRow;
  }
 
-function getChangeOfLastTwoDays($symbol = 'navigator.hu') {
-    $oneMonthAgo = date('Ymd', strtotime('-1 month'));
-    $today = date('Ymd');
 
-    $url = "https://stooq.com/q/d/l/?s={$symbol}&d1={$oneMonthAgo}&d2={$today}&i=d";
-    $csv_data = StockDataHelper::fetchUrl($url);
-    
-    if ($csv_data === false) {
-        return null; // could not fetch
-    }
-
-    $lines = explode("\n", trim($csv_data));
-
-    // First line = headers, last non-empty line = most recent row
-    $lastRow = str_getcsv($lines[count($lines) - 1]);
-    $headers = str_getcsv($lines[0]);
-
-     // Need at least 2 rows to calculate change
-    if (count($lines) < 2) {
-        return null;
-    }
-
-    // Last two rows
-    $lastRow     = str_getcsv($lines[count($lines) - 1]);
-    $prevRow     = str_getcsv($lines[count($lines) - 2]);
-
-    $lastData = array_combine($headers, $lastRow);
-    $prevData = array_combine($headers, $prevRow);
-
-    $lastClose = (float)($lastData['Close'] ?? 0);
-    $prevClose = (float)($prevData['Close'] ?? 0);
-
-    if ($lastClose && $prevClose) {
-        $changePct = (($lastClose - $prevClose) / $prevClose) * 100;
-    } else {
-        $changePct = null;
-    }
-
-    return $changePct;
-}
-
-
- function getLastPriceWithDate($symbol = 'navigator.hu') {
-    $url = "https://stooq.com/q/l/?s={$symbol}&f=sd2t2ohlcv&h&e=csv";
-    $csv_data = StockDataHelper::fetchUrl($url);
-    
-    if ($csv_data === false) {
-        return null; // could not fetch
-    }
-
-    $lines = explode("\n", trim($csv_data));
-
-    // First line = headers, last non-empty line = most recent row
-    $dataRow = str_getcsv($lines[1]);
-    $headers = str_getcsv($lines[0]);
-
-    $lastData = array_combine($headers, $dataRow);
-    $lastClose = (float)($lastData['Close'] ?? 0);
-
-    return [
-        'date'       => $lastData['Date'] ?? null,
-        'time'       => $lastData['Time'] ?? null,
-        'close'      => $lastClose
-    ];
-}
 
 function navigator_bar_render() {
   
-    $lastPrices = getLastPriceWithDate('navigator.hu');
-    $changePct = getChangeOfLastTwoDays();
+    $lastPrices = StockDataHelper::getLastPriceWithDate('navigator.hu');
+    $changePct = StockDataHelper::getChangeOfLastTwoDays();
     
     if ($lastPrices) {
         $lastClose = (float)($lastPrices['close'] ?? 0);
@@ -141,12 +77,6 @@ function navigator_bar_render() {
     } else {
         echo "<div class='stock-box error'>NAVIG</div>";
     }
-    
-    //$row = get_actual_rates();
-   
-    // echo '<div class="stock-box">
-    //          Árfolyam: nyító' . esc_html( $openPrice ) . ', záró: ' . esc_html( $closePrice ) . ' HUF
-    //       </div>';
 }
  
 // Stílus hozzáadása
