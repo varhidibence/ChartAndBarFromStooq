@@ -105,10 +105,10 @@ function navigator_bar_styles() {
         }
 
         .stock-box .change.up {
-            color: green;
+            color: #B2FBA5;
         }
         .stock-box .change.down {
-            color: red;
+            color: #EA5C4E;
         }
         .stock-box .change.unchanged {
             color: #B4C7E8;

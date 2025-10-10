@@ -24,14 +24,32 @@ function my_huf_chart_enqueue_scripts() {
         null,
         true
     );
+
+    wp_enqueue_style(
+        'bootstrap-css',
+        'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css'
+    );
+    wp_enqueue_script(
+        'bootstrap-js',
+        'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js',
+        array('jquery'),
+        null,
+        true
+    );
     
 }
 add_action( 'wp_enqueue_scripts', 'my_huf_chart_enqueue_scripts' );
 
+
 // Shortcode function
 function my_huf_chart_shortcode() {
 
-    $lastMonthData = StockDataHelper::fetchLastMonthData();
+    $lastMonthDataCSV = StockDataHelper::fetchLastMonthDataCSV();
+    $lastFive = StockDataHelper::get_last_rows_from_csv($lastMonthDataCSV, 5);
+    wp_add_inline_script('chartjs', 'console.log("Fetching data (last 5):", ' . json_encode($lastFive[4]) . ');');
+
+    $lastMonthData = StockDataHelper::csv_to_json($lastMonthDataCSV);
+
     $dataFromBeginning = StockDataHelper::fetchAllMonthlyData();
     $YTDData = StockDataHelper::fetchYTDData();
     $lastHalfYearData = StockDataHelper::fetchLastSixMonthData();
@@ -55,35 +73,6 @@ function my_huf_chart_shortcode() {
 
     <div class="container my-4">
         <div class="row align-items-start">
-            <!-- Table -->
-            <div class="navigator-table col-12 col-md-4 mb-3 mb-md-0">
-                <div class="table-main-data">
-                    <span class='price'><?php echo esc_html($latestPrice); ?> HUF </span>
-                    <span class='navi-tooltiptext'>
-                        <?php echo esc_html($formattedDate); ?> 
-                        <?php echo esc_html($latestTime); ?>
-                    </span>
-
-                    <span class='change {$class}'><?php echo esc_html($arrow); ?></span>
-                    <span class='changepercent'> 
-                        <?php echo esc_html($signChange); ?>
-                        <?php echo esc_html($formattedChange); ?> %
-                    </span>
-                </div>
-                <table class="table table-bordered table-sm">
-                    <thead class="table-light">
-                    </thead>
-                        <tbody>
-                            <tr><td>Adat 1</td><td>123</td></tr>
-                            <tr><td>Adat 2</td><td>456</td></tr>
-                            <tr><td>Adat 3</td><td>789</td></tr>
-                            <tr><td>Adat 4</td><td>234</td></tr>
-                            <tr><td>Adat 5</td><td>567</td></tr>
-                            <tr><td>Adat 6</td><td>890</td></tr>
-                        </tbody>
-                </table>
-            </div>
-
             <!-- Chart -->
             <div class="col-12 col-md-8">
                 <div class="chart-container">
@@ -96,6 +85,61 @@ function my_huf_chart_shortcode() {
                     </div>
                 </div>
             </div>
+
+            <!-- Table -->
+            <div class="navigator-table col-lg-4">
+                <div class="table-main card border-primary">
+                    <div>
+                        <div class='card-header pt-4 px-4 pb-0 border-0 d-flex align-items-center justify-content-between'>
+                            <div>Aktuális árfolyam</div>    
+                            <div>
+                                <span class='change <?php echo $class; ?>'><?php echo esc_html($arrow); ?></span>
+                                <?php echo esc_html($signChange); ?>
+                                <?php echo esc_html($formattedChange); ?> %
+                            </div>
+                        </div>
+                        <div class='card-body d-flex justify-content-center'>
+                            <div class='display-2 fw-bolder text-uppercase'>
+                                <?php echo esc_html($latestPrice); ?> HUF
+                            </div>
+                        </div>
+                        <div class="card-footer pb-4 px-4 pt-0 border-0 d-flex align-items-center justify-content-between">
+                            <div>
+                                <?php echo esc_html($formattedDate); ?> 
+                                <?php echo esc_html($latestTime); ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card border-opacity-25 mt-2">
+                    <div class="card-body py-3 d-flex justify-content-between rounded">
+                        <div><?php echo isset($lastFive[4]['Date']) ? $lastFive[4]['Date'] : '-'; ?> </div>
+                        <div><?php echo isset($lastFive[4]['Close']) ? $lastFive[4]['Close'] : '-'; ?> HUF</div>
+                    </div>
+                </div>
+                <div class="card border-opacity-25 mt-2">
+                    <div class="card-body py-3 d-flex justify-content-between">
+                        <div><?php echo isset($lastFive[3]['Date']) ? $lastFive[3]['Date'] : '-'; ?> </div>
+                        <div><?php echo isset($lastFive[3]['Close']) ? $lastFive[3]['Close'] : '-'; ?> HUF</div>
+                    </div>   
+                </div>
+
+                        <!-- <div class="d-flex justify-content-between">
+                            <div><?php echo isset($lastFive[2]['Date']) ? $lastFive[2]['Date'] : '-'; ?> </div>
+                            <div><?php echo isset($lastFive[2]['Close']) ? $lastFive[2]['Close'] : '-'; ?> HUF</div>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <div><?php echo isset($lastFive[1]['Date']) ? $lastFive[1]['Date'] : '-'; ?> </div>
+                            <div><?php echo isset($lastFive[1]['Close']) ? $lastFive[1]['Close'] : '-'; ?> HUF</div>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <div><?php echo isset($lastFive[0]['Date']) ? $lastFive[0]['Date'] : '-'; ?> </div>
+                            <div><?php echo isset($lastFive[0]['Close']) ? $lastFive[0]['Close'] : '-'; ?> HUF</div>
+                        </div>
+                    </div> -->
+
+                </div>
+            </div>
     </div>
     
     <script>
@@ -103,6 +147,7 @@ function my_huf_chart_shortcode() {
         console.log("NAVIGATOR HUF Chart plugin was loaded ✅");
 
         document.addEventListener("DOMContentLoaded", function () {
+
             const lastMonthData = <?php echo $lastMonthData; ?>;
             const labelsLastMonth = lastMonthData.map(row => row.Date);
             const openPricesLastMonth = lastMonthData.map(row => parseFloat(row.Close));
@@ -282,19 +327,33 @@ function navigator_chart_styles() {
       echo '<style>
 
         .navigator-table {
-            font-family: arial, sans-serif;
+            font-family: cardo  ;
             font-weight: bold;
         }
-        .table-main-data {
-            display: flex;
-            justify-content: center;
-            padding: 10px;
+            
+        .table-main {
+            background: #20304F;
+            color: #fff;
+        }
 
+        .table-main-data .price {
+            font-weight: bold;
+            font-size: 30px;
+        }
+
+        .table-main .change.up {
+            color: #B2FBA5;
+        }
+        .table-main .change.down {
+            color: #EA5C4E;
+        }
+        .table-main .change.unchanged {
+            color: #B4C7E8;
         }
         
         .chart-controls {
             display: flex;
-            justify-content: end;
+            justify-content: start;
             gap: 8px;
             margin-top: 12px;
         }   

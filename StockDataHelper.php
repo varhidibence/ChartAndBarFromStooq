@@ -123,6 +123,30 @@ class StockDataHelper {
         return $firstRow;
     }
 
+    public static function get_last_rows_from_csv(string $csvData, int $count = 5): array {
+        // Trim whitespace and split into lines
+        $lines = explode("\n", trim($csvData));
+
+        // Must have at least 2 lines: header + one row
+        if (count($lines) < 2) {
+            return [];
+        }
+
+        // Extract headers and parse them
+        $headers = str_getcsv(array_shift($lines));
+
+        // Parse each remaining line into an array
+        $rows = array_map('str_getcsv', $lines);
+
+        // Combine headers with row values
+        $data = array_map(function($row) use ($headers) {
+            return array_combine($headers, $row);
+        }, $rows);
+
+        // Return last $count rows
+        return array_slice($data, -$count);
+    }
+
     public static function fetchLastMonthData(){
         $ticker = 'navigator.hu';
         $today = date('Ymd');
@@ -144,6 +168,25 @@ class StockDataHelper {
 
         //wp_add_inline_script('chartjs', 'console.log("Fetched CSV json_data:", ' . json_encode($json_data) . ');');
         return $json_data;
+    }
+
+    public static function fetchLastMonthDataCSV(){
+        $ticker = 'navigator.hu';
+        $today = date('Ymd');
+        $oneMonthAgo = date('Ymd', strtotime('-1 month'));
+        $interval = 'd';     // napi
+
+        $url = "https://stooq.com/q/d/l/?s={$ticker}&d1={$oneMonthAgo}&d2={$today}&i={$interval}";
+
+        wp_add_inline_script('chartjs', 'console.log("Fetching data (Last month):", ' . json_encode($url) . ');');
+
+        // Lekérjük a CSV adatot
+        $csv_data = StockDataHelper::fetchUrl($url);
+        if ($csv_data === false) {
+            die("Nem sikerült lekérni az adatokat. url: {$url}");
+        }
+        
+        return $csv_data;
     }
 
     public static function fetchLastSixMonthData(){
