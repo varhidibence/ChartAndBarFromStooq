@@ -10,41 +10,10 @@ require_once WP_PLUGIN_DIR . '/chart-plugin/StockDataHelper.php';
 
 use NavigatorChart\Helpers\StockDataHelper;
 
- // Biztonság kedvéért ne fusson közvetlenül
- if ( ! defined( 'ABSPATH' ) ) {
-     exit;
- }
-
- // Itt jön a te saját árfolyam-lekérő kódod
-function get_actual_rates() {
-    $ticker = 'navigator.hu';
-    $start = date('Ymd', strtotime('-1 day'));
-    $end = date('Ymd');  // pl. mai nap
-    $interval = 'd';     // napi
-
-    $url = "https://stooq.com/q/d/l/?s={$ticker}&d1={$start}&d2={$end}&i={$interval}";
-
-    echo "<div>$url</div>";
-
-    $csv_data = StockDataHelper::fetchUrl($url);
-    if ($csv_data === false) {
-        die("Nem sikerült lekérni az adatokat. url: {$url}");
-    }
-
-
-    $rows = array_map('str_getcsv', explode("\n", trim($csv_data)));
-
-    if (empty($rows) || count($rows) < 1){
-        return [];
-    }
-    else {
-        $firstRow = $rows[1];
-    }
-    
-    return $firstRow;
- }
-
-
+// Not to run directly
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
 function navigator_bar_render() {
   
@@ -79,7 +48,7 @@ function navigator_bar_render() {
     }
 }
  
-// Stílus hozzáadása
+// Styling
 function navigator_bar_styles() {
       echo '<style>
         .stock-box {

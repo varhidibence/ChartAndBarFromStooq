@@ -95,4 +95,112 @@ class StockDataHelper {
         return $changePct;
     }
 
+    public static function get_actual_rates() {
+        $ticker = 'navigator.hu';
+        $start = date('Ymd', strtotime('-1 day'));
+        $end = date('Ymd');  // pl. mai nap
+        $interval = 'd';     // napi
+
+        $url = "https://stooq.com/q/d/l/?s={$ticker}&d1={$start}&d2={$end}&i={$interval}";
+
+        echo "<div>$url</div>";
+
+        $csv_data = StockDataHelper::fetchUrl($url);
+        if ($csv_data === false) {
+            die("Nem sikerült lekérni az adatokat. url: {$url}");
+        }
+
+
+        $rows = array_map('str_getcsv', explode("\n", trim($csv_data)));
+
+        if (empty($rows) || count($rows) < 1){
+            return [];
+        }
+        else {
+            $firstRow = $rows[1];
+        }
+        
+        return $firstRow;
+    }
+
+    public static function fetchLastMonthData(){
+        $ticker = 'navigator.hu';
+        $today = date('Ymd');
+        $oneMonthAgo = date('Ymd', strtotime('-1 month'));
+        $interval = 'd';     // napi
+
+        $url = "https://stooq.com/q/d/l/?s={$ticker}&d1={$oneMonthAgo}&d2={$today}&i={$interval}";
+
+        wp_add_inline_script('chartjs', 'console.log("Fetching data (Last month):", ' . json_encode($url) . ');');
+
+        // Lekérjük a CSV adatot
+        $csv_data = StockDataHelper::fetchUrl($url);
+        if ($csv_data === false) {
+            die("Nem sikerült lekérni az adatokat. url: {$url}");
+        }
+
+        //wp_add_inline_script('chartjs', 'console.log("Fetched CSV data:", ' . json_encode($csv_data) . ');');
+        $json_data = StockDataHelper::csv_to_json($csv_data);
+
+        //wp_add_inline_script('chartjs', 'console.log("Fetched CSV json_data:", ' . json_encode($json_data) . ');');
+        return $json_data;
+    }
+
+    public static function fetchLastSixMonthData(){
+        $ticker = 'navigator.hu';
+        $today = date('Ymd');
+        $halfYearAgo = date('Ymd', strtotime('-6 month'));
+        $interval = 'd';     // napi
+
+        $url = "https://stooq.com/q/d/l/?s={$ticker}&d1={$halfYearAgo}&d2={$today}&i={$interval}";
+
+        wp_add_inline_script('chartjs', 'console.log("Fetching data (Half year)):", ' . json_encode($url) . ');');
+        $csv_data = StockDataHelper::fetchUrl($url);
+        if ($csv_data === false) {
+            die("Nem sikerült lekérni az adatokat. url: {$url}");
+        }
+
+        $json_data = StockDataHelper::csv_to_json($csv_data);
+
+        return $json_data;
+    }
+
+    public static function fetchAllMonthlyData(){
+        $ticker = 'navigator.hu';
+        $end = date('Ymd');
+        $interval = 'w';     // weekly
+
+        $url = "https://stooq.com/q/d/l/?s={$ticker}&d2={$end}&i={$interval}";
+
+        wp_add_inline_script('chartjs', 'console.log("Fetching data (All):", ' . json_encode($url) . ');');
+        
+        $csv_data = StockDataHelper::fetchUrl($url);
+        if ($csv_data === false) {
+            die("Nem sikerült lekérni az adatokat. url: {$url}");
+        }
+        $json_data = StockDataHelper::csv_to_json($csv_data);
+
+        return $json_data;
+    }
+
+    public static function fetchYTDData(){
+        $ticker = 'navigator.hu';
+        $firstDayOfYear = date('Y0101');  
+        $end = date('Ymd');  // pl. mai nap
+        $interval = 'd';     // havi
+
+        $url = "https://stooq.com/q/d/l/?s={$ticker}&d1={$firstDayOfYear}&d2={$end}&i={$interval}";
+        wp_add_inline_script('chartjs', 'console.log("Fetching data (YTD):", ' . json_encode($url) . ');');
+        
+        $csv_data = StockDataHelper::fetchUrl($url);
+        //die("Nincsen megjelníthető adat");
+        if ($csv_data === false) {
+            die("Nem sikerült lekérni az adatokat. url: {$url}");
+        }
+        $json_data = StockDataHelper::csv_to_json($csv_data);
+
+        return $json_data;
+    }
+
+
 }
