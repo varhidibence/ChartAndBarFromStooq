@@ -40,6 +40,20 @@ function my_huf_chart_enqueue_scripts() {
 }
 add_action( 'wp_enqueue_scripts', 'my_huf_chart_enqueue_scripts' );
 
+function getFormattedDate(array $lastFive, int $number): string {
+    if (isset($lastFive[$number]['Date']) && !empty($lastFive[$number]['Date'])) {
+        $timestamp = strtotime($lastFive[$number]['Date']);
+        return $timestamp ? date('Y.m.d.', $timestamp) : '-';
+    }
+    return '-';
+}
+
+function getFormattedClose(array $lastFive, int $number): float {
+    if (isset($lastFive[$number]['Close']) && is_numeric($lastFive[$number]['Close'])) {
+        return round((float)$lastFive[$number]['Close'], 1);
+    }
+    return 0.0;
+}
 
 // Shortcode function
 function my_huf_chart_shortcode() {
@@ -72,9 +86,10 @@ function my_huf_chart_shortcode() {
     ob_start(); ?>
 
     <div class="container my-4">
+        <div class="navig-main-title display-3">NAVIGATOR árfolyam adatok</div>
         <div class="row align-items-start">
             <!-- Chart -->
-            <div class="col-12 col-md-8">
+            <div class="col-12 col-md-8 mt-3">
                 <div class="chart-container">
                     <canvas id="hufChart" width="400" height="200"></canvas>
                     <div class="chart-controls">
@@ -87,14 +102,14 @@ function my_huf_chart_shortcode() {
             </div>
 
             <!-- Table -->
-            <div class="navigator-table col-lg-4">
-                <div class="table-main card border-primary">
+            <div class="navigator-table col-lg-4 mt-3">
+                <div class="table-main card">
                     <div>
                         <div class='card-header pt-4 px-4 pb-0 border-0 d-flex align-items-center justify-content-between'>
                             <div>Aktuális árfolyam</div>    
                             <div>
                                 <span class='change <?php echo $class; ?>'><?php echo esc_html($arrow); ?></span>
-                                <?php echo esc_html($signChange); ?>
+                                <?php echo esc_html($signChange);?>
                                 <?php echo esc_html($formattedChange); ?> %
                             </div>
                         </div>
@@ -111,33 +126,39 @@ function my_huf_chart_shortcode() {
                         </div>
                     </div>
                 </div>
-                <div class="card border-opacity-25 mt-2">
-                    <div class="card-body py-3 d-flex justify-content-between rounded">
-                        <div><?php echo isset($lastFive[4]['Date']) ? $lastFive[4]['Date'] : '-'; ?> </div>
-                        <div><?php echo isset($lastFive[4]['Close']) ? $lastFive[4]['Close'] : '-'; ?> HUF</div>
+                <div>
+
+                </div class="navig-rows">
+                    <div class="navig-row card border-opacity-25 mt-2">
+                        <div class="card-body py-3 d-flex justify-content-between rounded">
+                            <div><?php echo getFormattedDate($lastFive, 4); ?> </div>
+                            <div><?php echo getFormattedClose($lastFive, 4); ?> HUF</div>
+                        </div>
                     </div>
-                </div>
-                <div class="card border-opacity-25 mt-2">
-                    <div class="card-body py-3 d-flex justify-content-between">
-                        <div><?php echo isset($lastFive[3]['Date']) ? $lastFive[3]['Date'] : '-'; ?> </div>
-                        <div><?php echo isset($lastFive[3]['Close']) ? $lastFive[3]['Close'] : '-'; ?> HUF</div>
-                    </div>   
-                </div>
-
-                        <!-- <div class="d-flex justify-content-between">
-                            <div><?php echo isset($lastFive[2]['Date']) ? $lastFive[2]['Date'] : '-'; ?> </div>
-                            <div><?php echo isset($lastFive[2]['Close']) ? $lastFive[2]['Close'] : '-'; ?> HUF</div>
-                        </div>
-                        <div class="d-flex justify-content-between">
-                            <div><?php echo isset($lastFive[1]['Date']) ? $lastFive[1]['Date'] : '-'; ?> </div>
-                            <div><?php echo isset($lastFive[1]['Close']) ? $lastFive[1]['Close'] : '-'; ?> HUF</div>
-                        </div>
-                        <div class="d-flex justify-content-between">
-                            <div><?php echo isset($lastFive[0]['Date']) ? $lastFive[0]['Date'] : '-'; ?> </div>
-                            <div><?php echo isset($lastFive[0]['Close']) ? $lastFive[0]['Close'] : '-'; ?> HUF</div>
-                        </div>
-                    </div> -->
-
+                    <div class="navig-row card border-opacity-25 mt-2">
+                        <div class="card-body py-3 d-flex justify-content-between">
+                            <div><?php echo getFormattedDate($lastFive, 3); ?> </div>
+                            <div><?php echo getFormattedClose($lastFive, 3); ?> HUF</div>
+                        </div>   
+                    </div>
+                    <div class="navig-row card border-opacity-25 mt-2">
+                        <div class="card-body py-3 d-flex justify-content-between">
+                            <div><?php echo getFormattedDate($lastFive, 2); ?> </div>
+                            <div><?php echo getFormattedClose($lastFive, 2); ?> HUF</div>
+                        </div>   
+                    </div>
+                    <div class="navig-row card border-opacity-25 mt-2">
+                        <div class="card-body py-3 d-flex justify-content-between">
+                            <div><?php echo getFormattedDate($lastFive, 1); ?> </div>
+                            <div><?php echo getFormattedClose($lastFive, 1); ?> HUF</div>
+                        </div>   
+                    </div>
+                    <div class="navig-row card border-opacity-25 mt-2">
+                        <div class="card-body py-3 d-flex justify-content-between">
+                            <div><?php echo getFormattedDate($lastFive, 0); ?> </div>
+                            <div><?php echo getFormattedClose($lastFive, 0); ?> HUF</div>
+                        </div>   
+                    </div>
                 </div>
             </div>
     </div>
@@ -222,6 +243,19 @@ function my_huf_chart_shortcode() {
                     ]
             };
 
+            const formatFullDate = function(value) {
+                return this.getLabelForValue(value); // full date
+            };
+            const formatMonthOnly = function(value, index, ticks) {
+                // get the actual label value from the chart
+                const label = this.getLabelForValue(value);
+                if (typeof label === 'string' && label.includes('-')) {
+                    const [year, month] = label.split('-');
+                    return `${year}-${month}`;
+                }
+                return label;
+            };
+
             const ctx = document.getElementById('hufChart').getContext('2d');
             const priceChart = new Chart(ctx, {
                 type: 'line',
@@ -230,7 +264,7 @@ function my_huf_chart_shortcode() {
                     responsive: true,
                     plugins: {
                         title: {
-                            display: true,
+                            display: false,
                             text: 'NAVIG árfolyam adatok (HUF)'
                         },
                     },
@@ -245,6 +279,7 @@ function my_huf_chart_shortcode() {
                                     weight: 'bold'
                                 },
                                 autoSkip: true,
+                                callback: formatMonthOnly,
                                 maxTicksLimit: 6 // show only ~10 labels at most
                             }
                         },
@@ -265,20 +300,6 @@ function my_huf_chart_shortcode() {
 
             Chart.defaults.backgroundColor = 'rgba(49, 64, 64, 1)'; // '#314040ff';
 
-
-            const formatFullDate = function(value) {
-                return this.getLabelForValue(value); // full date
-            };
-            const formatMonthOnly = function(value, index, ticks) {
-                // get the actual label value from the chart
-                const label = this.getLabelForValue(value);
-                if (typeof label === 'string' && label.includes('-')) {
-                    const [year, month] = label.split('-');
-                    return `${year}-${month}`;
-                }
-                return label;
-            };+
-
             document.getElementById('btn-month').addEventListener('click', () => {
                 priceChart.data = dataLastMonth;
                 priceChart.options.scales.x.type = 'category'; // make sure still category
@@ -293,14 +314,14 @@ function my_huf_chart_shortcode() {
                 priceChart.update('active');
             });
 
-               document.getElementById('btn-half-year').addEventListener('click', () => {
+            document.getElementById('btn-half-year').addEventListener('click', () => {
                 priceChart.data = dataHalfYear;
                 priceChart.options.scales.x.ticks.callback = formatMonthOnly;
                 priceChart.options.scales.x.type = 'category';
                 priceChart.update('active');
             });
 
-               document.getElementById('btn-all').addEventListener('click', () => {
+            document.getElementById('btn-all').addEventListener('click', () => {
                 priceChart.data = dataAll;
                 priceChart.options.scales.x.ticks.callback = formatMonthOnly;
                 priceChart.options.scales.x.type = 'category';
@@ -326,9 +347,19 @@ function my_huf_chart_shortcode() {
 function navigator_chart_styles() {
       echo '<style>
 
+        .navig-main-title {
+            font-family: cardo;
+        }
+
         .navigator-table {
-            font-family: cardo  ;
+            font-family: cardo;
             font-weight: bold;
+        }
+
+        .navig-row:hover {
+            background-color: #32799dff;
+            transition: background-color 0.6s ease;
+            cursor: pointer;
         }
             
         .table-main {
