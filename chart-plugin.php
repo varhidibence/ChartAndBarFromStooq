@@ -48,19 +48,23 @@ function getFormattedDate(array $lastFive, int $number): string {
     return '-';
 }
 
-function getFormattedClose(array $lastFive, int $number): float {
+function getFormattedClose(array $lastFive, int $number): ?float {
     if (isset($lastFive[$number]['Close']) && is_numeric($lastFive[$number]['Close'])) {
         return round((float)$lastFive[$number]['Close'], 1);
     }
-    return 0.0;
+    return null;
 }
 
 // Shortcode function
 function my_huf_chart_shortcode() {
 
     $lastMonthDataCSV = StockDataHelper::fetchLastMonthDataCSV();
+
+    if ($lastMonthDataCSV === false){
+        $lastMonthDataCSV = "";
+    }
     $lastFive = StockDataHelper::get_last_rows_from_csv($lastMonthDataCSV, 5);
-    wp_add_inline_script('chartjs', 'console.log("Fetching data (last 5):", ' . json_encode($lastFive[4]) . ');');
+    wp_add_inline_script('chartjs', 'console.log("Fetching data (last 5):", ' . json_encode($lastFive) . ');');
 
     $lastMonthData = StockDataHelper::csv_to_json($lastMonthDataCSV);
 
@@ -73,10 +77,11 @@ function my_huf_chart_shortcode() {
     
     $latestPrice = $latestStockData["close"] ?? "-";
     $latestDate = $latestStockData["date"] ?? "-";
-    $formattedDate = $latestDate != null ? date('Y.m.d', strtotime($latestDate)) : "-";
+    $formattedDate = !empty($latestDate) && strtotime($latestDate)
+        ? date('Y.m.d', strtotime($latestDate))
+        : '-';
     $latestTime = $latestStockData["time"] ?? "-";
-    
-    
+
     $arrow = $changePct == 0 ? "-" : ($changePct > 0 ? "▲" : "▼");
     $class = $changePct == 0 ? "unchanged" : ($changePct > 0 ? "up" : "down");
     // Format with exactly one decimal place
@@ -243,15 +248,20 @@ function my_huf_chart_shortcode() {
                     ]
             };
 
-            const formatFullDate = function(value) {
-                return this.getLabelForValue(value); // full date
+            const formatFullDate = function(value, index, ticks) {
+                const label = this.getLabelForValue(value); // full date
+                if (typeof label === 'string' && label.includes('-')) {
+                    const [year, month, day] = label.split('-');
+                    return `${year}.${month}.${day}.`;
+                }
+                return label;
             };
             const formatMonthOnly = function(value, index, ticks) {
                 // get the actual label value from the chart
                 const label = this.getLabelForValue(value);
                 if (typeof label === 'string' && label.includes('-')) {
                     const [year, month] = label.split('-');
-                    return `${year}-${month}`;
+                    return `${year}.${month}.`;
                 }
                 return label;
             };
@@ -394,7 +404,7 @@ function navigator_chart_styles() {
             border: none;
             border-radius: 2px;
             background: #828282;
-            font-family: cardo;
+            font-family: arial, sans-serif;;
             color: #fff;
             cursor: pointer;
             transition: background-color 0.5s, transform 0.1s;

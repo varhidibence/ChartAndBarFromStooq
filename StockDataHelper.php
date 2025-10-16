@@ -33,9 +33,9 @@ class StockDataHelper {
     public static function getLastPriceWithDate($symbol = 'navigator.hu') {
         $url = "https://stooq.com/q/l/?s={$symbol}&f=sd2t2ohlcv&h&e=csv";
         $csv_data = StockDataHelper::fetchUrl($url);
-        
+
         if ($csv_data === false) {
-            return null; // could not fetch
+            return [];
         }
 
         $lines = explode("\n", trim($csv_data));
@@ -106,8 +106,9 @@ class StockDataHelper {
         echo "<div>$url</div>";
 
         $csv_data = StockDataHelper::fetchUrl($url);
-        if ($csv_data === false) {
-            die("Nem sikerült lekérni az adatokat. url: {$url}");
+
+        if (empty($csvData)) {
+            return [];
         }
 
 
@@ -123,7 +124,11 @@ class StockDataHelper {
         return $firstRow;
     }
 
-    public static function get_last_rows_from_csv(string $csvData, int $count = 5): array {
+    public static function get_last_rows_from_csv(?string $csvData, int $count = 5): array {
+        if (empty($csvData)) {
+            return [];
+        }
+
         // Trim whitespace and split into lines
         $lines = explode("\n", trim($csvData));
 
@@ -178,10 +183,11 @@ class StockDataHelper {
 
         $url = "https://stooq.com/q/d/l/?s={$ticker}&d1={$oneMonthAgo}&d2={$today}&i={$interval}";
 
-        wp_add_inline_script('chartjs', 'console.log("Fetching data (Last month):", ' . json_encode($url) . ');');
+        //wp_add_inline_script('chartjs', 'console.log("Fetching data (Last month):", ' . json_encode($url) . ');');
 
         // Lekérjük a CSV adatot
         $csv_data = StockDataHelper::fetchUrl($url);
+
         if ($csv_data === false) {
             die("Nem sikerült lekérni az adatokat. url: {$url}");
         }
