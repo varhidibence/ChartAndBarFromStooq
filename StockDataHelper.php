@@ -103,7 +103,7 @@ class StockDataHelper {
 
         $url = "https://stooq.com/q/d/l/?s={$ticker}&d1={$start}&d2={$end}&i={$interval}";
 
-        echo "<div>$url</div>";
+        //echo "<div>$url</div>";
 
         $csv_data = StockDataHelper::fetchUrl($url);
 
@@ -160,7 +160,7 @@ class StockDataHelper {
 
         $url = "https://stooq.com/q/d/l/?s={$ticker}&d1={$oneMonthAgo}&d2={$today}&i={$interval}";
 
-        wp_add_inline_script('chartjs', 'console.log("Fetching data (Last month):", ' . json_encode($url) . ');');
+        //wp_add_inline_script('chartjs', 'console.log("Fetching data (Last month):", ' . json_encode($url) . ');');
 
         // Lekérjük a CSV adatot
         $csv_data = StockDataHelper::fetchUrl($url);
@@ -203,7 +203,7 @@ class StockDataHelper {
 
         $url = "https://stooq.com/q/d/l/?s={$ticker}&d1={$halfYearAgo}&d2={$today}&i={$interval}";
 
-        wp_add_inline_script('chartjs', 'console.log("Fetching data (Half year)):", ' . json_encode($url) . ');');
+        //wp_add_inline_script('chartjs', 'console.log("Fetching data (Half year)):", ' . json_encode($url) . ');');
         $csv_data = StockDataHelper::fetchUrl($url);
         if ($csv_data === false) {
             die("Nem sikerült lekérni az adatokat. url: {$url}");
@@ -221,7 +221,7 @@ class StockDataHelper {
 
         $url = "https://stooq.com/q/d/l/?s={$ticker}&d2={$end}&i={$interval}";
 
-        wp_add_inline_script('chartjs', 'console.log("Fetching data (All):", ' . json_encode($url) . ');');
+        //wp_add_inline_script('chartjs', 'console.log("Fetching data (All):", ' . json_encode($url) . ');');
         
         $csv_data = StockDataHelper::fetchUrl($url);
         if ($csv_data === false) {

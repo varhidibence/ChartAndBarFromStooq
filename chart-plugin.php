@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Enqueue Chart.js
+// Enqueue Chart.js, Bootstrap
 function my_huf_chart_enqueue_scripts() {
     wp_enqueue_script(
         'chartjs',
@@ -35,6 +35,14 @@ function my_huf_chart_enqueue_scripts() {
         array('jquery'),
         null,
         true
+    );
+
+      wp_enqueue_script(
+        'navigator-fix',
+        '/wp-content/plugins/chart-plugin/navigator-fix.js',
+        array(), // no dependencies
+        '1.0',
+        true // load in footer
     );
     
 }
@@ -56,7 +64,7 @@ function getFormattedClose(array $lastFive, int $number): ?float {
 }
 
 // Shortcode function
-function my_huf_chart_shortcode() {
+function navigator_huf_chart_shortcode() {
 
     $lastMonthDataCSV = StockDataHelper::fetchLastMonthDataCSV();
 
@@ -170,9 +178,18 @@ function my_huf_chart_shortcode() {
     
     <script>
 
-        console.log("NAVIGATOR HUF Chart plugin was loaded ✅");
+        console.log("NAVIGATOR HUF Chart plugin by Bence Várhidi was loaded ✅");
 
         document.addEventListener("DOMContentLoaded", function () {
+
+            const isMobile = window.matchMedia("(max-width: 768px)").matches;
+
+            const pointRadius = 3;
+            const pointHoverRadius = 5;
+            if (isMobile) {
+                const pointRadius = 1;
+                const pointHoverRadius = 2;
+            }
 
             const lastMonthData = <?php echo $lastMonthData; ?>;
             const labelsLastMonth = lastMonthData.map(row => row.Date);
@@ -204,7 +221,9 @@ function my_huf_chart_shortcode() {
                             data: closePricesLastMonth,
                             backgroundColor: lineColor,
                             borderColor: lineColor,
-                            borderWidth: 1
+                            borderWidth: 1,
+                            pointRadius: pointRadius,
+                            pointHoverRadius: pointHoverRadius
                         }
                     ]
             };
@@ -217,7 +236,9 @@ function my_huf_chart_shortcode() {
                             data: closePricesAll,
                             backgroundColor: lineColor,
                             borderColor: lineColor,
-                            borderWidth: 1
+                            borderWidth: 1,
+                            pointRadius: pointRadius,
+                            pointHoverRadius: pointHoverRadius
                         }
                     ]
             };
@@ -230,7 +251,10 @@ function my_huf_chart_shortcode() {
                             data: closePricesYTD,
                             backgroundColor: lineColor,
                             borderColor: lineColor,
-                            borderWidth: 1
+                            borderWidth: 1,
+                            pointStyle: 'circle',
+                            pointRadius: pointRadius,
+                            pointHoverRadius: pointHoverRadius
                         }
                     ]
             };
@@ -243,7 +267,9 @@ function my_huf_chart_shortcode() {
                             data: closePricesHalfYear,
                             backgroundColor: lineColor,
                             borderColor: lineColor,
-                            borderWidth: 1
+                            borderWidth: 1,
+                            pointRadius: pointRadius,
+                            pointHoverRadius: pointHoverRadius
                         }
                     ]
             };
@@ -314,6 +340,11 @@ function my_huf_chart_shortcode() {
                 priceChart.data = dataLastMonth;
                 priceChart.options.scales.x.type = 'category'; // make sure still category
                 priceChart.options.scales.x.ticks.callback = formatFullDate;
+
+                if (isMobile) {
+                    priceChart.data.datasets[0].pointRadius = 2;
+                    priceChart.data.datasets[0].pointHoverRadius = 3;
+                }
                 priceChart.update('active'); // force re-render ticks
             });
 
@@ -321,13 +352,24 @@ function my_huf_chart_shortcode() {
                 priceChart.data = dataYTD;
                 priceChart.options.scales.x.ticks.callback = formatMonthOnly;
                 priceChart.options.scales.x.type = 'category';
+
+                if (isMobile) {
+                    priceChart.data.datasets[0].pointRadius = 2;
+                    priceChart.data.datasets[0].pointHoverRadius = 3;
+                }
                 priceChart.update('active');
             });
+
 
             document.getElementById('btn-half-year').addEventListener('click', () => {
                 priceChart.data = dataHalfYear;
                 priceChart.options.scales.x.ticks.callback = formatMonthOnly;
                 priceChart.options.scales.x.type = 'category';
+
+                if (isMobile) {
+                    priceChart.data.datasets[0].pointRadius = 2;
+                    priceChart.data.datasets[0].pointHoverRadius = 3;
+                }
                 priceChart.update('active');
             });
 
@@ -335,7 +377,12 @@ function my_huf_chart_shortcode() {
                 priceChart.data = dataAll;
                 priceChart.options.scales.x.ticks.callback = formatMonthOnly;
                 priceChart.options.scales.x.type = 'category';
-                priceChart.update('active');
+                
+                if (isMobile) {
+                    priceChart.data.datasets[0].pointRadius = 2;
+                    priceChart.data.datasets[0].pointHoverRadius = 3;
+                }
+                priceChart.update('active');    
             });
         });
 
@@ -367,9 +414,8 @@ function navigator_chart_styles() {
         }
 
         .navig-row:hover {
-            background-color: #32799dff;
+            background-color: #B4C7E8;
             transition: background-color 0.6s ease;
-            cursor: pointer;
         }
             
         .table-main {
@@ -404,23 +450,27 @@ function navigator_chart_styles() {
             border: none;
             border-radius: 2px;
             background: #828282;
-            font-family: arial, sans-serif;;
+            font-family: arial;
             color: #fff;
             cursor: pointer;
             transition: background-color 0.5s, transform 0.1s;
+            text-transform: uppercase;
+            letter-spacing: 3.15px;
+            font-size: 9px;
+            line-height: 12px;
         }
         .chart-controls button:hover {
-            background-color: #20304f; /* darker on hover */
+            background-color: #2a4068; /* darker on hover */
             transform: translateY(-2px);
         }
 
         .chart-controls button:active {
-            background-color: #004a70; /* even darker when clicked */
+            background-color: #2a4068; /* even darker when clicked */
             transform: translateY(0);
         }
 
         .chart-controls button.active {
-            background-color: #004a70; /* highlighted active state */
+            background-color: #2a4068; /* highlighted active state */
         }
     </style>';
 }
@@ -428,4 +478,4 @@ function navigator_chart_styles() {
 
 add_action('wp_head', 'navigator_chart_styles');
 
-add_shortcode( 'my_chart', 'my_huf_chart_shortcode' );
+add_shortcode( 'navigator_chart', 'navigator_huf_chart_shortcode' );
