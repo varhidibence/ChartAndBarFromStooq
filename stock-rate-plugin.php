@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 function navigator_bar_render() {
-  
+
     $lastPrices = StockDataHelper::getLastPriceWithDate('navigator.hu');
     $changePct = StockDataHelper::getChangeOfLastTwoDays();
     
@@ -25,9 +25,6 @@ function navigator_bar_render() {
         $date = $lastPrices['date'] ?? null;
         $time = $lastPrices['time'] ?? null;
 
-        if (true) {
-            echo "<div class='stock-box error'>NAVIG</div>";
-        }
         $arrow = $changePct == 0 ? "-" : ($changePct > 0 ? "▲" : "▼");
         $class = $changePct == 0 ? "unchanged" : ($changePct > 0 ? "up" : "down");
         // Format with exactly one decimal place
@@ -35,16 +32,42 @@ function navigator_bar_render() {
         $signChange = $changePct == 0 ? "" : ($changePct > 0 ? "+" : "");
 
         echo "
-            <div class='stock-box'>NAVIG
+        <a class='palyazat' href='https://www.navigatorinvest.com/palyazatok/' 
+            style='position:fixed; right:0; bottom:-4px; z-index:150;	width:170px;'>
+                <img src='' 
+                    alt='Széchenyi 2020' 
+                    style='max-width: 100%;height:auto;'>
+            </a>
+            <ul class='stock-box pull-left'>NAVIG
                 <span class='price'>{$lastClose} HUF
                     <span class='navi-tooltiptext'>{$date} {$time}</span>
                 </span>
                 <span class='change {$class}'>{$arrow}</span>
                 <span class='changepercent'> {$signChange}{$formattedChange}%</span>
-            </div>
-        ";
+            </ul>
+                <header class='header-style1 default-bg'>
+                <div class='pre-header secondary-bg-dark'>
+                <div class='container'>
+                    <ul class='contact-block pull-right white'>
+                        <li id='language_list' class='dropdown'>
+                            
+                        </li>
+                        <li class=''>
+                            <i class='fa fa-envelope-o primary-color' aria-hidden='true'>
+                            </i>info@navigatorinvest.com
+                        </li>
+                        <li class='topbar-button'>
+                            <a href='https://www.navigatorinvest.com/kapcsolat/' class='button caps_normal btn_small btn-primary'>
+                                Lépjen velünk kapcsolatba!
+                            </a>
+                        </li>	
+                        
+                    </ul>
+                </div><!-- .container -->
+            </div><!-- pre-header -->
+            ";
     } else {
-        echo "<div class='stock-box error'>NAVIG</div>";
+        echo "";
     }
 }
  
@@ -52,7 +75,7 @@ function navigator_bar_render() {
 function navigator_bar_styles() {
       echo '<style>
         .stock-box {
-            width: 100%;
+            width: 20%;
             background: #20304f;
             color: #fff;
             text-align: left;
@@ -60,14 +83,9 @@ function navigator_bar_styles() {
             font-size: 13px;
             font-family: arial, sans-serif;
             font-weight: bold;
-            position: fixed;
-            top: 0;
-            left: 0;
-            z-index: 9000;
         }
 
         .stock-box .price {
-            margin-left: 5px;
             position: relative; /* a tooltip igazításához kell */
             cursor: pointer;
             font-weight: normal;
@@ -112,15 +130,6 @@ function navigator_bar_styles() {
         }
         .stock-box .change.unchanged {
             color: #B4C7E8;
-        }
-
-        // .stock-box.error {
-        //     background: #ffe0e0;
-        //     color: red;
-        // }
-
-        body {
-            padding-top: 30px; /* hogy ne takarja ki a tartalmat */
         }
     </style>';
 }

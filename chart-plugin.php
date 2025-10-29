@@ -7,6 +7,7 @@ Author: Bence Várhidi
 */
 
 require_once WP_PLUGIN_DIR . '/chart-plugin/StockDataHelper.php';
+require_once plugin_dir_path(__FILE__) . 'stooq-admin-menu.php';
 
 use NavigatorChart\Helpers\StockDataHelper;
 
@@ -66,7 +67,8 @@ function getFormattedClose(array $lastFive, int $number): ?float {
 // Shortcode function
 function navigator_huf_chart_shortcode() {
 
-    $lastMonthDataCSV = StockDataHelper::fetchLastMonthDataCSV();
+    $lastMonthData = StockDataHelper::GetCachedLastMonthData();
+    $lastMonthDataCSV = json_decode($lastMonthData, true);
 
     if ($lastMonthDataCSV === false){
         $lastMonthDataCSV = "";
@@ -74,11 +76,9 @@ function navigator_huf_chart_shortcode() {
     $lastFive = StockDataHelper::get_last_rows_from_csv($lastMonthDataCSV, 5);
     wp_add_inline_script('chartjs', 'console.log("Fetching data (last 5):", ' . json_encode($lastFive) . ');');
 
-    $lastMonthData = StockDataHelper::csv_to_json($lastMonthDataCSV);
-
-    $dataFromBeginning = StockDataHelper::fetchAllMonthlyData();
-    $YTDData = StockDataHelper::fetchYTDData();
-    $lastHalfYearData = StockDataHelper::fetchLastSixMonthData();
+    $dataFromBeginning = StockDataHelper::GetCachedAllData();
+    $YTDData = StockDataHelper::GetCachedYTDData();
+    $lastHalfYearData = StockDataHelper::GetCachedLastSixMonthData();
 
     $latestStockData = StockDataHelper::getLastPriceWithDate();
     $changePct = StockDataHelper::getChangeOfLastTwoDays();
@@ -184,11 +184,11 @@ function navigator_huf_chart_shortcode() {
 
             const isMobile = window.matchMedia("(max-width: 768px)").matches;
 
-            const pointRadius = 3;
-            const pointHoverRadius = 5;
+            var pointRadius = 3;
+            var pointHoverRadius = 4;
             if (isMobile) {
-                const pointRadius = 1;
-                const pointHoverRadius = 2;
+                pointRadius = 1;
+                pointHoverRadius = 2;
             }
 
             const lastMonthData = <?php echo $lastMonthData; ?>;
@@ -345,6 +345,10 @@ function navigator_huf_chart_shortcode() {
                     priceChart.data.datasets[0].pointRadius = 2;
                     priceChart.data.datasets[0].pointHoverRadius = 3;
                 }
+                else {
+                    priceChart.data.datasets[0].pointRadius = 3;
+                    priceChart.data.datasets[0].pointHoverRadius = 4;
+                }
                 priceChart.update('active'); // force re-render ticks
             });
 
@@ -356,6 +360,10 @@ function navigator_huf_chart_shortcode() {
                 if (isMobile) {
                     priceChart.data.datasets[0].pointRadius = 2;
                     priceChart.data.datasets[0].pointHoverRadius = 3;
+                }
+                else {
+                    priceChart.data.datasets[0].pointRadius = 3;
+                    priceChart.data.datasets[0].pointHoverRadius = 4;
                 }
                 priceChart.update('active');
             });
@@ -369,6 +377,12 @@ function navigator_huf_chart_shortcode() {
                 if (isMobile) {
                     priceChart.data.datasets[0].pointRadius = 2;
                     priceChart.data.datasets[0].pointHoverRadius = 3;
+
+                    priceChart.options.scales.x.ticks.maxTicksLimit = 4;
+                }
+                else {
+                    priceChart.data.datasets[0].pointRadius = 3;
+                    priceChart.data.datasets[0].pointHoverRadius = 4;
                 }
                 priceChart.update('active');
             });
@@ -381,6 +395,10 @@ function navigator_huf_chart_shortcode() {
                 if (isMobile) {
                     priceChart.data.datasets[0].pointRadius = 2;
                     priceChart.data.datasets[0].pointHoverRadius = 3;
+                }
+                else {
+                    priceChart.data.datasets[0].pointRadius = 3;
+                    priceChart.data.datasets[0].pointHoverRadius = 4;
                 }
                 priceChart.update('active');    
             });
