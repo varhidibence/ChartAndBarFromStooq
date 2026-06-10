@@ -26,6 +26,14 @@
 
 # Claude
 CLAUDE.md
+/.claude/
 
 # Test
 /test/
+/test-admin/
+
+# IDE
+/.vscode/
+
+# Stubs
+/stubs/

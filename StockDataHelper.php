@@ -4,7 +4,7 @@ namespace NavigatorChart\Helpers;
 class StockDataHelper {
     const STOOQ_APIKEY = 'ZFdMJhSyi62Tljw81eDKNZuoBrxvcVm7';
     const STOOQ_TICKER = 'navigator.hu';
-    const RETRY_AFTER_ERROR = 900; // 10 perc - hiba eseten ennyi ido utan probalkozik ujra
+    const RETRY_AFTER_ERROR = 900; // 15 perc - hiba eseten ennyi ido utan probalkozik ujra
     public static function fetchUrl($url): bool|string {
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
@@ -260,28 +260,28 @@ class StockDataHelper {
     }
 	
     /**
-     * Kozos cache logika a JSON-t visszaado fetch fuggvenyekhez.
-     * Siker eseten elmenti az adatot es a timestamp-et (kovetkezo frissites TTL mulva).
-     * Hiba eseten RETRY_AFTER_ERROR mulva ujraprobalja, addig a regi cache-t hasznalja.
+     * Csak cache-bol olvas, soha nem hiv API-t.
+     * A frissites a WP cron feladata (refreshAllData).
      */
-    private static function getCachedJsonData(string $cache_key, string $timestamp_key, int $ttl, callable $fetch_fn, string $label): string {
+    private static function getCachedJsonData(string $cache_key): string {
         $cached_data = get_option($cache_key);
-        $expires_at = get_option($timestamp_key);
+        return $cached_data ?: wp_json_encode([]);
+    }
 
-        $should_refresh = !$cached_data || !$expires_at || time() > $expires_at;
+    /**
+     * Cron altal hivott frissito logika egyetlen adattipushoz.
+     * Siker eseten elmenti az adatot es a timestamp-et.
+     * Hiba eseten RETRY_AFTER_ERROR mulva ujraprobalja.
+     */
+    public static function refreshCachedJsonData(string $cache_key, string $timestamp_key, int $ttl, callable $fetch_fn, string $label): void {
+        $cached_data = get_option($cache_key);
 
-        if (!$should_refresh) {
-            wp_add_inline_script('chartjs', 'console.log("Returning cached ' . $label . ' data");');
-            return $cached_data;
-        }
-
-        wp_add_inline_script('chartjs', 'console.log("No cached ' . $label . ' data, fetching...");');
         $response = $fetch_fn();
 
         if ($response === 'Exceeded the daily hits limit') {
-            error_log('Stooq [' . $label . ']: exceeded the daily hits limit, using cached data if available.');
+            error_log('Stooq [' . $label . ']: exceeded the daily hits limit.');
             update_option($timestamp_key, time() + self::RETRY_AFTER_ERROR);
-            return $cached_data ?: wp_json_encode([]);
+            return;
         }
 
         $decoded = json_decode($response, true);
@@ -289,87 +289,102 @@ class StockDataHelper {
         if (json_last_error() !== JSON_ERROR_NONE) {
             error_log('Stooq [' . $label . ']: invalid JSON returned.');
             update_option($timestamp_key, time() + self::RETRY_AFTER_ERROR);
-            return $cached_data ?: wp_json_encode([]);
+            return;
         }
 
         if (empty($decoded)) {
             error_log('Stooq [' . $label . ']: decoded response is empty, keeping cached data.');
             update_option($timestamp_key, time() + self::RETRY_AFTER_ERROR);
-            return $cached_data ?: wp_json_encode([]);
+            return;
         }
 
-        // Sikeres fetch - cache frissitese
         update_option($cache_key, $response);
         update_option($timestamp_key, time() + $ttl);
         update_option($timestamp_key . '_last', time());
-
-        return $response;
     }
 
     public static function GetCachedYTDData() {
-        return self::getCachedJsonData(
+        return self::getCachedJsonData('navig_stooq_ytd_data');
+    }
+
+    public static function GetCachedLastMonthData() {
+        return self::getCachedJsonData('navig_stooq_last_month_data');
+    }
+
+    public static function GetCachedLastSixMonthData() {
+        return self::getCachedJsonData('navig_stooq_last_half_year_data');
+    }
+
+    public static function GetCachedAllData() {
+        return self::getCachedJsonData('navig_stooq_all_data');
+    }
+
+    public static function GetCachedLastPrice() {
+        $cached_data = get_option('navig_stooq_last_price_data');
+        if ($cached_data) {
+            return json_decode($cached_data, true);
+        }
+        return [];
+    }
+
+    public static function refreshYTDData(): void {
+        self::refreshCachedJsonData(
             'navig_stooq_ytd_data', 'navig_stooq_ytd_fetch', DAY_IN_SECONDS,
             [self::class, 'fetchYTDData'], 'YTD'
         );
     }
 
-    public static function GetCachedLastMonthData() {
-        return self::getCachedJsonData(
+    public static function refreshLastMonthData(): void {
+        self::refreshCachedJsonData(
             'navig_stooq_last_month_data', 'navig_stooq_last_month_fetch', DAY_IN_SECONDS,
             [self::class, 'fetchLastMonthData'], 'last_month'
         );
     }
 
-    public static function GetCachedLastSixMonthData() {
-        return self::getCachedJsonData(
+    public static function refreshLastSixMonthData(): void {
+        self::refreshCachedJsonData(
             'navig_stooq_last_half_year_data', 'navig_stooq_last_half_year_fetch', DAY_IN_SECONDS,
             [self::class, 'fetchLastSixMonthData'], 'last_half_year'
         );
     }
 
-    public static function GetCachedAllData() {
-        return self::getCachedJsonData(
+    public static function refreshAllMonthlyData(): void {
+        self::refreshCachedJsonData(
             'navig_stooq_all_data', 'navig_stooq_all_fetch', DAY_IN_SECONDS,
             [self::class, 'fetchAllMonthlyData'], 'all'
         );
     }
 
-    public static function GetCachedLastPrice() {
+    /**
+     * Osszes adat frissitese - ezt hivja a napi WP cron.
+     */
+    public static function refreshAllData(): void {
+        self::refreshYTDData();
+        self::refreshLastMonthData();
+        self::refreshLastSixMonthData();
+        self::refreshAllMonthlyData();
+        self::refreshLastPrice();
+    }
+
+    /**
+     * Csak az utolso ar frissitese - ezt hivja a 15 perces cron.
+     */
+    public static function refreshLastPrice(): void {
         $cache_key = 'navig_stooq_last_price_data';
         $timestamp_key = 'navig_stooq_last_price_fetch';
-        $ttl = 900; // 15 perc
+        $ttl = 900;
 
-        $cached_data = get_option($cache_key);
-        $expires_at = get_option($timestamp_key);
-
-        $should_refresh = !$cached_data || !$expires_at || time() > $expires_at;
-
-        if (!$should_refresh) {
-            wp_add_inline_script('chartjs', 'console.log("GetCachedLastPrice: returning cached data", ' . $cached_data . ');');
-            return json_decode($cached_data, true);
-        }
-
-        $response = StockDataHelper::getLastPriceWithDate();
+        $response = self::getLastPriceWithDate();
 
         if (!empty($response) && isset($response['close']) && $response['close'] > 0) {
             update_option($cache_key, wp_json_encode($response));
             update_option($timestamp_key, time() + $ttl);
             update_option($timestamp_key . '_last', time());
-            wp_add_inline_script('chartjs', 'console.log("GetCachedLastPrice: fresh data fetched", ' . wp_json_encode($response) . ');');
-            return $response;
+            return;
         }
 
-        // Hiba - RETRY_AFTER_ERROR mulva ujraprobal
+        error_log('Stooq: refreshLastPrice() failed.');
         update_option($timestamp_key, time() + self::RETRY_AFTER_ERROR);
-
-        if ($cached_data) {
-            error_log('Stooq: getLastPriceWithDate() failed, using cached data.');
-            wp_add_inline_script('chartjs', 'console.log("GetCachedLastPrice: fetch failed, using cached data", ' . $cached_data . ');');
-            return json_decode($cached_data, true);
-        }
-
-        wp_add_inline_script('chartjs', 'console.log("GetCachedLastPrice: no data available");');
-        return [];
     }
  
 }

@@ -9,35 +9,49 @@ function myplugin_render_stooq_cache_page() {
             'label' => 'YTD data',
             'cache_key' => 'navig_stooq_ytd_data',
             'timestamp_key' => 'navig_stooq_ytd_fetch',
-            'fetch_method' => 'GetCachedYTDData',
+            'refresh_method' => 'refreshYTDData',
         ],
         'last_month' => [
             'label' => 'Last month data',
             'cache_key' => 'navig_stooq_last_month_data',
             'timestamp_key' => 'navig_stooq_last_month_fetch',
-            'fetch_method' => 'GetCachedLastMonthData',
+            'refresh_method' => 'refreshLastMonthData',
         ],
         'last_half_year' => [
             'label' => 'Last half year data',
             'cache_key' => 'navig_stooq_last_half_year_data',
             'timestamp_key' => 'navig_stooq_last_half_year_fetch',
-            'fetch_method' => 'GetCachedLastSixMonthData',
+            'refresh_method' => 'refreshLastSixMonthData',
         ],
         'all' => [
             'label' => 'All data monthly',
             'cache_key' => 'navig_stooq_all_data',
             'timestamp_key' => 'navig_stooq_all_fetch',
-            'fetch_method' => 'GetCachedAllData',
+            'refresh_method' => 'refreshAllMonthlyData',
         ],
         'last_price' => [
-            'label' => 'Last price (15 min cache)',
+            'label' => 'Last price (15 min cron)',
             'cache_key' => 'navig_stooq_last_price_data',
             'timestamp_key' => 'navig_stooq_last_price_fetch',
-            'fetch_method' => 'GetCachedLastPrice',
+            'refresh_method' => 'refreshLastPrice',
         ],
     ];
 
     echo '<div class="wrap"><h1>Stooq cache</h1>';
+
+    // Cron statusz
+    $tz = wp_timezone_string();
+    $next_all = wp_next_scheduled('navig_cron_refresh_all_data');
+    $next_price = wp_next_scheduled('navig_cron_refresh_last_price');
+    echo '<div class="card" style="max-width:600px;padding:12px;margin-bottom:16px;">';
+    echo '<h3 style="margin-top:0;">WP Cron schedule</h3>';
+    echo '<p><strong>All data refresh (daily):</strong> ';
+    echo $next_all ? wp_date('Y.m.d. H:i:s', $next_all) . ' (' . esc_html($tz) . ')' : '<em>Not scheduled</em>';
+    echo '</p>';
+    echo '<p><strong>Last price refresh (every 15 min):</strong> ';
+    echo $next_price ? wp_date('Y.m.d. H:i:s', $next_price) . ' (' . esc_html($tz) . ')' : '<em>Not scheduled</em>';
+    echo '</p>';
+    echo '</div>';
 
     foreach ($datasets as $key => $info) {
         $cache_key = $info['cache_key'];
@@ -52,15 +66,16 @@ function myplugin_render_stooq_cache_page() {
         $textarea_name = "json_data_$key";
 
         if (isset($_POST[$refresh_key])) {
-            delete_option($cache_key);
-            delete_option($timestamp_key);
             if (class_exists('\NavigatorChart\Helpers\StockDataHelper') &&
-                method_exists('\NavigatorChart\Helpers\StockDataHelper', $info['fetch_method'])) {
-                $data = call_user_func(['\NavigatorChart\Helpers\StockDataHelper', $info['fetch_method']]);
-            } else {
-                $data = '{"error": "Fetch method not found"}';
+                method_exists('\NavigatorChart\Helpers\StockDataHelper', $info['refresh_method'])) {
+                call_user_func(['\NavigatorChart\Helpers\StockDataHelper', $info['refresh_method']]);
             }
-            echo '<div class="updated"><p><strong>' . esc_html($label) . ' updated</strong></p></div>';
+            $fresh = get_option($cache_key);
+            if ($fresh) {
+                echo '<div class="updated"><p><strong>' . esc_html($label) . ' updated</strong></p></div>';
+            } else {
+                echo '<div class="error"><p><strong>' . esc_html($label) . ':</strong> API call failed, no new data.</p></div>';
+            }
         } elseif (isset($_POST[$clear_key])) {
             delete_option($cache_key);
             delete_option($timestamp_key);
@@ -77,7 +92,7 @@ function myplugin_render_stooq_cache_page() {
                 echo '<div class="updated"><p><strong>' . esc_html($label) . ' JSON data saved!</strong></p></div>';
             } else {
                 $data = get_option($cache_key);
-                echo '<div class="error"><p><strong>Hiba:</strong> Not valid JSON (' . esc_html($label) . ').</p></div>';
+                echo '<div class="error"><p><strong>Error:</strong> Not valid JSON (' . esc_html($label) . ').</p></div>';
             }
         }
         
@@ -104,19 +119,19 @@ function myplugin_render_stooq_cache_page() {
         $last_fetched_at = get_option($timestamp_key . '_last');
         if ($last_fetch) {
             $tz = wp_timezone_string();
-            $expires_label = (time() > $last_fetch) ? ' (lejárt)' : '';
+            $expires_label = (time() > $last_fetch) ? ' (expired)' : '';
             if ($last_fetched_at) {
-                echo '<p><strong>Utolsó lekérés:</strong> ' . wp_date('Y.m.d. H:i:s', $last_fetched_at) . ' (' . esc_html($tz) . ')</p>';
+                echo '<p><strong>Last fetched:</strong> ' . wp_date('Y.m.d. H:i:s', $last_fetched_at) . ' (' . esc_html($tz) . ')</p>';
             }
-            echo '<p><strong>Cache lejárat:</strong> ' . wp_date('Y.m.d. H:i:s', $last_fetch) . ' (' . esc_html($tz) . ')' . $expires_label . '</p>';
+            echo '<p><strong>Cache expires:</strong> ' . wp_date('Y.m.d. H:i:s', $last_fetch) . ' (' . esc_html($tz) . ')' . $expires_label . '</p>';
         } else {
-            echo '<p><em>Még nincs adat lekérve.</em></p>';
+            echo '<p><em>No data fetched yet.</em></p>';
         }
 
         // Buttons
         echo '<form method="post" style="margin-bottom:1em;">';
-        echo '<button class="button button-primary" name="refresh_data_' . esc_attr($key) . '">Frissítés most</button> ';
-        echo '<button class="button" name="clear_data_' . esc_attr($key) . '">Gyorsítótár törlése</button>';
+        echo '<button class="button button-primary" name="refresh_data_' . esc_attr($key) . '">Refresh now</button> ';
+        echo '<button class="button" name="clear_data_' . esc_attr($key) . '">Clear cache</button>';
         echo '</form>';
 
         // JSON editor
@@ -129,13 +144,13 @@ function myplugin_render_stooq_cache_page() {
 
             echo '<form method="post">';
             echo '<textarea name="json_data_' . esc_attr($key) . '" style="width:100%;height:400px;font-family:monospace;">' . esc_textarea($pretty) . '</textarea>';
-            echo '<p><button class="button button-primary" name="save_json_data_' . esc_attr($key) . '">Mentés</button></p>';
+            echo '<p><button class="button button-primary" name="save_json_data_' . esc_attr($key) . '">Save</button></p>';
             echo '</form>';
         } else {
-            echo '<p>Nincs mentett adat.</p>';
+            echo '<p>No cached data.</p>';
             echo '<form method="post">';
-            echo '<textarea name="json_data_' . esc_attr($key) . '" placeholder="Ide illesztheted be a JSON-t..." style="width:100%;height:300px;font-family:monospace;"></textarea>';
-            echo '<p><button class="button button-primary" name="save_json_data_' . esc_attr($key) . '">Mentés</button></p>';
+            echo '<textarea name="json_data_' . esc_attr($key) . '" placeholder="Paste JSON here..." style="width:100%;height:300px;font-family:monospace;"></textarea>';
+            echo '<p><button class="button button-primary" name="save_json_data_' . esc_attr($key) . '">Save</button></p>';
             echo '</form>';
         }
 

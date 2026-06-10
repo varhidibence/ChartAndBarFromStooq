@@ -16,6 +16,53 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// --- WP Cron: Stooq adat frissites ---
+
+// Egyedi 15 perces intervallum regisztralas
+add_filter('cron_schedules', function($schedules) {
+    $schedules['every_15_minutes'] = [
+        'interval' => 900,
+        'display'  => 'Every 15 minutes',
+    ];
+    return $schedules;
+});
+
+// Kovetkezo 18:30 Budapest ido kiszamitasa (tozsde zaras utan)
+function navig_next_daily_run(): int {
+    $tz = new DateTimeZone('Europe/Budapest');
+    $now = new DateTime('now', $tz);
+    $target = new DateTime('today 18:30', $tz);
+    if ($now > $target) {
+        $target->modify('+1 day');
+    }
+    return $target->getTimestamp();
+}
+
+// Cron esemenyek utemezese plugin aktivalaskor
+register_activation_hook(__FILE__, function() {
+    if (!wp_next_scheduled('navig_cron_refresh_all_data')) {
+        wp_schedule_event(navig_next_daily_run(), 'daily', 'navig_cron_refresh_all_data');
+    }
+    if (!wp_next_scheduled('navig_cron_refresh_last_price')) {
+        wp_schedule_event(time(), 'every_15_minutes', 'navig_cron_refresh_last_price');
+    }
+});
+
+// Cron esemenyek torlese plugin deaktivalaskor
+register_deactivation_hook(__FILE__, function() {
+    wp_clear_scheduled_hook('navig_cron_refresh_all_data');
+    wp_clear_scheduled_hook('navig_cron_refresh_last_price');
+});
+
+// Cron callback-ek
+add_action('navig_cron_refresh_all_data', function() {
+    StockDataHelper::refreshAllData();
+});
+
+add_action('navig_cron_refresh_last_price', function() {
+    StockDataHelper::refreshLastPrice();
+});
+
 // Enqueue Chart.js, Bootstrap
 function my_huf_chart_enqueue_scripts() {
     wp_enqueue_script(
@@ -152,7 +199,7 @@ function navigator_huf_chart_shortcode() {
                 </div>
                 <div>
 
-                </div class="navig-rows">
+                <div class="navig-rows">
                     <div class="navig-row card border-opacity-25 mt-2">
                         <div class="card-body py-3 d-flex justify-content-between rounded">
                             <div><?php echo getFormattedDate($lastFive, 4); ?> </div>
