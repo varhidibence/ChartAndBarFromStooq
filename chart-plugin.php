@@ -1,8 +1,8 @@
 <?php
 /*
 Plugin Name: NAVIGATOR stock rate chart and informational table plugin
-Description: A plugin that shows a chart with Chart.js.
-Version: 1.0
+Description: A plugin that shows a chart with Chart.js, data from Stooq.
+Version: 1.2
 Author: Bence Várhidi
 */
 
@@ -26,6 +26,14 @@ function my_huf_chart_enqueue_scripts() {
         true
     );
 
+    wp_enqueue_script(
+        'chartjs-adapter-date-fns',
+        'https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns',
+        array('chartjs'),
+        null,
+        true
+    );
+
     wp_enqueue_style(
         'bootstrap-css',
         'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css'
@@ -37,8 +45,8 @@ function my_huf_chart_enqueue_scripts() {
         null,
         true
     );
-
-      wp_enqueue_script(
+	
+	wp_enqueue_script(
         'navigator-fix',
         '/wp-content/plugins/chart-plugin/navigator-fix.js',
         array(), // no dependencies
@@ -74,14 +82,13 @@ function navigator_huf_chart_shortcode() {
         $lastMonthDataCSV = "";
     }
     $lastFive = StockDataHelper::get_last_rows_from_csv($lastMonthDataCSV, 5);
-    wp_add_inline_script('chartjs', 'console.log("Fetching data (last 5):", ' . json_encode($lastFive) . ');');
+    wp_add_inline_script('chartjs', 'console.log("Last 5 data:", ' . json_encode($lastFive) . ');');
 
     $dataFromBeginning = StockDataHelper::GetCachedAllData();
     $YTDData = StockDataHelper::GetCachedYTDData();
     $lastHalfYearData = StockDataHelper::GetCachedLastSixMonthData();
 
-    $latestStockData = StockDataHelper::getLastPriceWithDate();
-    $changePct = StockDataHelper::getChangeOfLastTwoDays();
+    $latestStockData = StockDataHelper::GetCachedLastPrice();
     
     $latestPrice = $latestStockData["close"] ?? "-";
     $latestDate = $latestStockData["date"] ?? "-";
@@ -89,7 +96,11 @@ function navigator_huf_chart_shortcode() {
         ? date('Y.m.d', strtotime($latestDate))
         : '-';
     $latestTime = $latestStockData["time"] ?? "-";
+	
+	$yesterdayData = !empty($lastFive) ? end($lastFive) : [];
+    $changePct = StockDataHelper::getChangeOfLastTwoDays($latestStockData, $yesterdayData);
 
+    $changePct = $changePct ?? 0;
     $arrow = $changePct == 0 ? "-" : ($changePct > 0 ? "▲" : "▼");
     $class = $changePct == 0 ? "unchanged" : ($changePct > 0 ? "up" : "down");
     // Format with exactly one decimal place
@@ -98,7 +109,7 @@ function navigator_huf_chart_shortcode() {
 
     ob_start(); ?>
 
-    <div class="container my-4">
+    <div class="my-4">
         <div class="navig-main-title display-3">NAVIGATOR árfolyam adatok</div>
         <div class="row align-items-start">
             <!-- Chart -->
@@ -184,11 +195,11 @@ function navigator_huf_chart_shortcode() {
 
             const isMobile = window.matchMedia("(max-width: 768px)").matches;
 
-            var pointRadius = 3;
-            var pointHoverRadius = 4;
+            var pointRadius = 2;
+            var pointHoverRadius = 3;
             if (isMobile) {
                 pointRadius = 1;
-                pointHoverRadius = 2;
+                pointHoverRadius = 1;
             }
 
             const lastMonthData = <?php echo $lastMonthData; ?>;
@@ -237,8 +248,8 @@ function navigator_huf_chart_shortcode() {
                             backgroundColor: lineColor,
                             borderColor: lineColor,
                             borderWidth: 1,
-                            pointRadius: pointRadius,
-                            pointHoverRadius: pointHoverRadius
+                            pointRadius: 0,
+                            pointHoverRadius: 0
                         }
                     ]
             };
@@ -274,22 +285,20 @@ function navigator_huf_chart_shortcode() {
                     ]
             };
 
-            const formatFullDate = function(value, index, ticks) {
-                const label = this.getLabelForValue(value); // full date
-                if (typeof label === 'string' && label.includes('-')) {
-                    const [year, month, day] = label.split('-');
-                    return `${year}.${month}.${day}.`;
-                }
-                return label;
+            const timeScaleDay = {
+                type: 'time',
+                time: { unit: 'day', displayFormats: { day: 'yyyy.MM.dd.' } },
+                ticks: { font: { weight: 'bold' }, autoSkip: true, maxTicksLimit: 6 }
             };
-            const formatMonthOnly = function(value, index, ticks) {
-                // get the actual label value from the chart
-                const label = this.getLabelForValue(value);
-                if (typeof label === 'string' && label.includes('-')) {
-                    const [year, month] = label.split('-');
-                    return `${year}.${month}.`;
-                }
-                return label;
+            const timeScaleMonth = {
+                type: 'time',
+                time: { unit: 'month', displayFormats: { month: 'yyyy.MM.' } },
+                ticks: { font: { weight: 'bold' }, autoSkip: true, maxTicksLimit: 6 }
+            };
+            const timeScaleQuarter = {
+                type: 'time',
+                time: { unit: 'quarter', displayFormats: { quarter: 'yyyy.MM.' } },
+                ticks: { font: { weight: 'bold' }, autoSkip: true, maxTicksLimit: 6 }
             };
 
             const ctx = document.getElementById('hufChart').getContext('2d');
@@ -303,22 +312,20 @@ function navigator_huf_chart_shortcode() {
                             display: false,
                             text: 'NAVIG árfolyam adatok (HUF)'
                         },
+                        tooltip: {
+                            callbacks: {
+                                title: function(items) {
+                                    const d = new Date(items[0].parsed.x);
+                                    return d.getFullYear() + '.' + String(d.getMonth()+1).padStart(2,'0') + '.' + String(d.getDate()).padStart(2,'0') + '.';
+                                }
+                            }
+                        }
                     },
                     interaction: {
                         intersect: false,
                     },
                     scales: {
-                        x: {
-                            type: 'category',
-                            ticks: {
-                                font: {
-                                    weight: 'bold'
-                                },
-                                autoSkip: true,
-                                callback: formatMonthOnly,
-                                maxTicksLimit: 6 // show only ~10 labels at most
-                            }
-                        },
+                        x: timeScaleMonth,
                         y: {
                             beginAtZero: false,
                             ticks: {
@@ -336,71 +343,39 @@ function navigator_huf_chart_shortcode() {
 
             Chart.defaults.backgroundColor = 'rgba(49, 64, 64, 1)'; // '#314040ff';
 
-            document.getElementById('btn-month').addEventListener('click', () => {
-                priceChart.data = dataLastMonth;
-                priceChart.options.scales.x.type = 'category'; // make sure still category
-                priceChart.options.scales.x.ticks.callback = formatFullDate;
-
+            function switchChart(data, scale, continuous = false) {
+                priceChart.data = data;
+                priceChart.options.scales.x = scale;
+                if (continuous) {
+                    priceChart.data.datasets[0].pointRadius = 0;
+                    priceChart.data.datasets[0].pointHoverRadius = 0;
+                } else if (isMobile) {
+                    priceChart.data.datasets[0].pointRadius = 1;
+                    priceChart.data.datasets[0].pointHoverRadius = 1;
+                } else {
+                    priceChart.data.datasets[0].pointRadius = pointRadius;
+                    priceChart.data.datasets[0].pointHoverRadius = pointHoverRadius;
+                }
                 if (isMobile) {
-                    priceChart.data.datasets[0].pointRadius = 2;
-                    priceChart.data.datasets[0].pointHoverRadius = 3;
+                    priceChart.options.scales.x.ticks.maxTicksLimit = 4;
                 }
-                else {
-                    priceChart.data.datasets[0].pointRadius = 3;
-                    priceChart.data.datasets[0].pointHoverRadius = 4;
-                }
-                priceChart.update('active'); // force re-render ticks
+                priceChart.update('active');
+            }
+
+            document.getElementById('btn-month').addEventListener('click', () => {
+                switchChart(dataLastMonth, timeScaleDay);
             });
 
             document.getElementById('btn-year').addEventListener('click', () => {
-                priceChart.data = dataYTD;
-                priceChart.options.scales.x.ticks.callback = formatMonthOnly;
-                priceChart.options.scales.x.type = 'category';
-
-                if (isMobile) {
-                    priceChart.data.datasets[0].pointRadius = 2;
-                    priceChart.data.datasets[0].pointHoverRadius = 3;
-                }
-                else {
-                    priceChart.data.datasets[0].pointRadius = 3;
-                    priceChart.data.datasets[0].pointHoverRadius = 4;
-                }
-                priceChart.update('active');
+                switchChart(dataYTD, timeScaleMonth);
             });
 
-
             document.getElementById('btn-half-year').addEventListener('click', () => {
-                priceChart.data = dataHalfYear;
-                priceChart.options.scales.x.ticks.callback = formatMonthOnly;
-                priceChart.options.scales.x.type = 'category';
-
-                if (isMobile) {
-                    priceChart.data.datasets[0].pointRadius = 2;
-                    priceChart.data.datasets[0].pointHoverRadius = 3;
-
-                    priceChart.options.scales.x.ticks.maxTicksLimit = 4;
-                }
-                else {
-                    priceChart.data.datasets[0].pointRadius = 3;
-                    priceChart.data.datasets[0].pointHoverRadius = 4;
-                }
-                priceChart.update('active');
+                switchChart(dataHalfYear, timeScaleMonth);
             });
 
             document.getElementById('btn-all').addEventListener('click', () => {
-                priceChart.data = dataAll;
-                priceChart.options.scales.x.ticks.callback = formatMonthOnly;
-                priceChart.options.scales.x.type = 'category';
-                
-                if (isMobile) {
-                    priceChart.data.datasets[0].pointRadius = 2;
-                    priceChart.data.datasets[0].pointHoverRadius = 3;
-                }
-                else {
-                    priceChart.data.datasets[0].pointRadius = 3;
-                    priceChart.data.datasets[0].pointHoverRadius = 4;
-                }
-                priceChart.update('active');    
+                switchChart(dataAll, timeScaleQuarter, true);
             });
         });
 

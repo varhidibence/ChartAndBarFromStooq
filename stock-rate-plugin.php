@@ -2,7 +2,7 @@
 /**
  * Plugin Name: NAVIGATOR Stock rate plugin
  * Description: Shows actual NAVIGATOR rates within a bar at the top of every page
- * Version: 1.0
+ * Version: 1.2
  * Author: Bence Várhidi
  */
 
@@ -16,15 +16,22 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 function navigator_bar_render() {
+  
+    $lastPrices = StockDataHelper::GetCachedLastPrice();
+    
+    $lastMonthData = StockDataHelper::GetCachedLastMonthData();
+    $lastMonthDataCSV = json_decode($lastMonthData, true);
 
-    $lastPrices = StockDataHelper::getLastPriceWithDate('navigator.hu');
-    $changePct = StockDataHelper::getChangeOfLastTwoDays();
+    $lastFive = StockDataHelper::get_last_rows_from_csv($lastMonthDataCSV, 5);
+    $yesterdayData = !empty($lastFive) ? end($lastFive) : [];
+    $changePct = StockDataHelper::getChangeOfLastTwoDays($lastPrices, $yesterdayData);
     
     if ($lastPrices) {
         $lastClose = (float)($lastPrices['close'] ?? 0);
         $date = $lastPrices['date'] ?? null;
         $time = $lastPrices['time'] ?? null;
-
+		
+		$changePct = $changePct ?? 0;
         $arrow = $changePct == 0 ? "-" : ($changePct > 0 ? "▲" : "▼");
         $class = $changePct == 0 ? "unchanged" : ($changePct > 0 ? "up" : "down");
         // Format with exactly one decimal place
@@ -32,12 +39,6 @@ function navigator_bar_render() {
         $signChange = $changePct == 0 ? "" : ($changePct > 0 ? "+" : "");
 
         echo "
-        <a class='palyazat' href='https://www.navigatorinvest.com/palyazatok/' 
-            style='position:fixed; right:0; bottom:-4px; z-index:150;	width:170px;'>
-                <img src='' 
-                    alt='Széchenyi 2020' 
-                    style='max-width: 100%;height:auto;'>
-            </a>
             <ul class='stock-box pull-left'>NAVIG
                 <span class='price'>{$lastClose} HUF
                     <span class='navi-tooltiptext'>{$date} {$time}</span>
@@ -45,37 +46,91 @@ function navigator_bar_render() {
                 <span class='change {$class}'>{$arrow}</span>
                 <span class='changepercent'> {$signChange}{$formattedChange}%</span>
             </ul>
-                <header class='header-style1 default-bg'>
-                <div class='pre-header secondary-bg-dark'>
-                <div class='container'>
-                    <ul class='contact-block pull-right white'>
-                        <li id='language_list' class='dropdown'>
-                            
-                        </li>
-                        <li class=''>
-                            <i class='fa fa-envelope-o primary-color' aria-hidden='true'>
-                            </i>info@navigatorinvest.com
-                        </li>
-                        <li class='topbar-button'>
-                            <a href='https://www.navigatorinvest.com/kapcsolat/' class='button caps_normal btn_small btn-primary'>
-                                Lépjen velünk kapcsolatba!
-                            </a>
-                        </li>	
-                        
-                    </ul>
-                </div><!-- .container -->
-            </div><!-- pre-header -->
-            ";
+        ";
     } else {
         echo "";
     }
+}
+
+function navigator_bar_display_fix() {
+	?>
+     <script>
+    	document.addEventListener('DOMContentLoaded', () => {
+			const stockBox = document.querySelector('.stock-box');
+			const containerDiv = document.querySelector('.pre-header .container');
+			const emailLink = document.querySelector('.pre-header li .fa-envelope-o')?.parentElement;
+			const locationLink = document.querySelector('.pre-header li .fa-map-marker')?.parentElement;
+
+			if (!stockBox || !containerDiv || !emailLink) return;
+			
+			function adjustStockBoxHeight() {
+				const containerHeight = containerDiv.offsetHeight;
+				if (containerHeight > 0) {
+					stockBox.style.height = containerHeight + 'px';
+					stockBox.style.display = 'flex';
+					stockBox.style.alignItems = 'center';
+				}
+			}
+
+			function moveStockBox() {
+				// Handle 1200px and below
+				if (window.innerWidth <= 1200) {
+					if (locationLink) locationLink.style.display = 'none';
+				} else {
+					if (locationLink) locationLink.style.display = ''; // show it again
+				}
+				if (window.innerWidth <= 768) {
+					if (emailLink) emailLink.style.display = 'none';
+					stockBox.style.display = 'flex';
+					stockBox.style.alignItems = 'center';
+					stockBox.style.width = '50%';
+					stockBox.style.position = 'fixed';
+					stockBox.style.top = '0';
+					stockBox.style.left = '50%'; // move to the middle
+					stockBox.style.transform = 'translateX(-50%)'; // actually center it
+
+					//stockBox.style.left = '100px';
+					
+					// Find and hide the empty div/element above stock-box
+					const above = stockBox.parentElement?.previousElementSibling;
+					if (above) {
+						above.style.display = 'none';
+						console.log('Navigator fix: hiding empty element above stock-box');
+					}
+					
+				} else {
+					if (emailLink) emailLink.style.display = '';
+					
+					// Restore stock-box to container on desktop
+					const firstUl = containerDiv.querySelector('ul');
+					if (firstUl && !containerDiv.contains(stockBox)) {
+						containerDiv.insertBefore(stockBox, firstUl);
+						stockBox.style.display = 'flex';
+						stockBox.style.alignItems = 'center';
+						stockBox.style.margin = '0';
+						stockBox.style.width = '20%';
+						stockBox.style.height = '30px';
+						stockBox.style.position = '';
+						stockBox.style.top = '';
+					}
+				}
+				
+				adjustStockBoxHeight();
+			}
+			// Initial placement
+			moveStockBox();
+
+			// Re-run on resize / orientation change
+			window.addEventListener('resize', moveStockBox);
+    	});
+    	</script>
+    <?php
 }
  
 // Styling
 function navigator_bar_styles() {
       echo '<style>
         .stock-box {
-            width: 20%;
             background: #20304f;
             color: #fff;
             text-align: left;
@@ -83,7 +138,14 @@ function navigator_bar_styles() {
             font-size: 13px;
             font-family: arial, sans-serif;
             font-weight: bold;
+			display: flex;
+			align-items: center;
+			gap: 6px; /* optional spacing between spans */
         }
+		.stock-box span {
+		  display: inline-block;
+		  white-space: nowrap;
+		}
 
         .stock-box .price {
             position: relative; /* a tooltip igazításához kell */
@@ -133,8 +195,9 @@ function navigator_bar_styles() {
         }
     </style>';
 }
-
 add_action('wp_head', 'navigator_bar_styles');
 
 // Megjelenítés a body tetején
 add_action('wp_body_open', 'navigator_bar_render');
+
+add_action('wp_footer', 'navigator_bar_display_fix');

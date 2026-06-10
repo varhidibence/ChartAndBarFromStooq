@@ -24,10 +24,16 @@ function myplugin_render_stooq_cache_page() {
             'fetch_method' => 'GetCachedLastSixMonthData',
         ],
         'all' => [
-            'label' => 'All data weekly',
+            'label' => 'All data monthly',
             'cache_key' => 'navig_stooq_all_data',
             'timestamp_key' => 'navig_stooq_all_fetch',
             'fetch_method' => 'GetCachedAllData',
+        ],
+        'last_price' => [
+            'label' => 'Last price (15 min cache)',
+            'cache_key' => 'navig_stooq_last_price_data',
+            'timestamp_key' => 'navig_stooq_last_price_fetch',
+            'fetch_method' => 'GetCachedLastPrice',
         ],
     ];
 
@@ -65,35 +71,56 @@ function myplugin_render_stooq_cache_page() {
             $decoded = json_decode($new_data, true);
             if (json_last_error() === JSON_ERROR_NONE) {
                 update_option($cache_key, wp_unslash($new_data));
-                update_option($timestamp_key, time());
+                $ttl = ($key === 'last_price') ? 900 : DAY_IN_SECONDS;
+                update_option($timestamp_key, time() + $ttl);
                 $data = $new_data;
                 echo '<div class="updated"><p><strong>' . esc_html($label) . ' JSON data saved!</strong></p></div>';
             } else {
                 $data = get_option($cache_key);
                 echo '<div class="error"><p><strong>Hiba:</strong> Not valid JSON (' . esc_html($label) . ').</p></div>';
             }
-        } else {
-            $data = get_option($cache_key);
         }
+        
+    }
 
+    // Tab navigation
+    echo '<h2 class="nav-tab-wrapper">';
+    foreach ($datasets as $key => $info) {
+        echo '<a href="#tab-' . esc_attr($key) . '" class="nav-tab" id="tablink-' . esc_attr($key) . '">' . esc_html($info['label']) . '</a>';
+    }
+    echo '</h2>';
+
+    // Tab content panels
+    foreach ($datasets as $key => $info) {
+        $cache_key = $info['cache_key'];
+        $timestamp_key = $info['timestamp_key'];
+        $label = $info['label'];
+
+        $data = get_option($cache_key);
         $last_fetch = get_option($timestamp_key);
 
-        // Section header
-        echo '<hr><h2>' . esc_html($label) . '</h2>';
+        echo '<div id="tab-' . esc_attr($key) . '" class="tab-content" style="display:none;">';
 
+        $last_fetched_at = get_option($timestamp_key . '_last');
         if ($last_fetch) {
-            echo '<p><strong>Last fetch:</strong> ' . date('Y.m.d. H:i:s', $last_fetch) . '</p>';
+            $tz = wp_timezone_string();
+            $expires_label = (time() > $last_fetch) ? ' (lejárt)' : '';
+            if ($last_fetched_at) {
+                echo '<p><strong>Utolsó lekérés:</strong> ' . wp_date('Y.m.d. H:i:s', $last_fetched_at) . ' (' . esc_html($tz) . ')</p>';
+            }
+            echo '<p><strong>Cache lejárat:</strong> ' . wp_date('Y.m.d. H:i:s', $last_fetch) . ' (' . esc_html($tz) . ')' . $expires_label . '</p>';
         } else {
-            echo '<p><em>No data fetched.</em></p>';
+            echo '<p><em>Még nincs adat lekérve.</em></p>';
         }
 
         // Buttons
         echo '<form method="post" style="margin-bottom:1em;">';
-        echo '<button class="button button-primary" name="' . esc_attr($refresh_key) . '">Fetch now</button> ';
-        echo '<button class="button" name="' . esc_attr($clear_key) . '">Clear cache</button>';
+        echo '<button class="button button-primary" name="refresh_data_' . esc_attr($key) . '">Frissítés most</button> ';
+        echo '<button class="button" name="clear_data_' . esc_attr($key) . '">Gyorsítótár törlése</button>';
         echo '</form>';
 
         // JSON editor
+        echo '<h3>' . esc_html($label) . ' JSON</h3>';
         if ($data) {
             $decoded = json_decode($data, true);
             $pretty = (json_last_error() === JSON_ERROR_NONE)
@@ -101,17 +128,48 @@ function myplugin_render_stooq_cache_page() {
                 : $data;
 
             echo '<form method="post">';
-            echo '<textarea name="' . esc_attr($textarea_name) . '" style="width:100%;height:400px;font-family:monospace;">' . esc_textarea($pretty) . '</textarea>';
-            echo '<p><button class="button button-primary" name="' . esc_attr($save_key) . '">Save data</button></p>';
+            echo '<textarea name="json_data_' . esc_attr($key) . '" style="width:100%;height:400px;font-family:monospace;">' . esc_textarea($pretty) . '</textarea>';
+            echo '<p><button class="button button-primary" name="save_json_data_' . esc_attr($key) . '">Mentés</button></p>';
             echo '</form>';
         } else {
             echo '<p>Nincs mentett adat.</p>';
             echo '<form method="post">';
-            echo '<textarea name="' . esc_attr($textarea_name) . '" placeholder="Put JSON data here..." style="width:100%;height:300px;font-family:monospace;"></textarea>';
-            echo '<p><button class="button button-primary" name="' . esc_attr($save_key) . '">Save</button></p>';
+            echo '<textarea name="json_data_' . esc_attr($key) . '" placeholder="Ide illesztheted be a JSON-t..." style="width:100%;height:300px;font-family:monospace;"></textarea>';
+            echo '<p><button class="button button-primary" name="save_json_data_' . esc_attr($key) . '">Mentés</button></p>';
             echo '</form>';
         }
+
+        echo '</div>';
     }
+
+    // JavaScript for tab switching
+    echo '
+    <script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const tabs = document.querySelectorAll(".nav-tab");
+        const panels = document.querySelectorAll(".tab-content");
+
+        function showTab(id) {
+            panels.forEach(p => p.style.display = "none");
+            tabs.forEach(t => t.classList.remove("nav-tab-active"));
+            document.getElementById("tab-" + id).style.display = "block";
+            document.getElementById("tablink-" + id).classList.add("nav-tab-active");
+            localStorage.setItem("stooqActiveTab", id);
+        }
+
+        // Restore last open tab
+        const saved = localStorage.getItem("stooqActiveTab") || "ytd";
+        showTab(saved);
+
+        tabs.forEach(tab => {
+            tab.addEventListener("click", e => {
+                e.preventDefault();
+                showTab(tab.id.replace("tablink-", ""));
+            });
+        });
+    });
+    </script>
+    ';
 
     echo '</div>';
 }
