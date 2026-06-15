@@ -65,6 +65,10 @@ function myplugin_render_stooq_cache_page() {
         $save_key = "save_json_data_$key";
         $textarea_name = "json_data_$key";
 
+        if (isset($_POST[$refresh_key]) || isset($_POST[$clear_key]) || isset($_POST[$save_key])) {
+            check_admin_referer('stooq_cache_action');
+        }
+
         if (isset($_POST[$refresh_key])) {
             if (class_exists('\NavigatorChart\Helpers\StockDataHelper') &&
                 method_exists('\NavigatorChart\Helpers\StockDataHelper', $info['refresh_method'])) {
@@ -82,10 +86,10 @@ function myplugin_render_stooq_cache_page() {
             $data = null;
             echo '<div class="updated"><p><strong>' . esc_html($label) . ' cleared!</strong></p></div>';
         } elseif (isset($_POST[$save_key])) {
-            $new_data = stripslashes($_POST[$textarea_name]);
+            $new_data = wp_unslash($_POST[$textarea_name]);
             $decoded = json_decode($new_data, true);
             if (json_last_error() === JSON_ERROR_NONE) {
-                update_option($cache_key, wp_unslash($new_data));
+                update_option($cache_key, $new_data);
                 $ttl = ($key === 'last_price') ? 900 : DAY_IN_SECONDS;
                 update_option($timestamp_key, time() + $ttl);
                 $data = $new_data;
@@ -98,11 +102,19 @@ function myplugin_render_stooq_cache_page() {
         
     }
 
+    // Clear log handling
+    if (isset($_POST['clear_stooq_log'])) {
+        check_admin_referer('stooq_cache_action');
+        StockDataHelper::clearLog();
+        echo '<div class="updated"><p><strong>Log cleared!</strong></p></div>';
+    }
+
     // Tab navigation
     echo '<h2 class="nav-tab-wrapper">';
     foreach ($datasets as $key => $info) {
         echo '<a href="#tab-' . esc_attr($key) . '" class="nav-tab" id="tablink-' . esc_attr($key) . '">' . esc_html($info['label']) . '</a>';
     }
+    echo '<a href="#tab-log" class="nav-tab" id="tablink-log">Log</a>';
     echo '</h2>';
 
     // Tab content panels
@@ -130,6 +142,7 @@ function myplugin_render_stooq_cache_page() {
 
         // Buttons
         echo '<form method="post" style="margin-bottom:1em;">';
+        wp_nonce_field('stooq_cache_action');
         echo '<button class="button button-primary" name="refresh_data_' . esc_attr($key) . '">Refresh now</button> ';
         echo '<button class="button" name="clear_data_' . esc_attr($key) . '">Clear cache</button>';
         echo '</form>';
@@ -143,12 +156,14 @@ function myplugin_render_stooq_cache_page() {
                 : $data;
 
             echo '<form method="post">';
+            wp_nonce_field('stooq_cache_action');
             echo '<textarea name="json_data_' . esc_attr($key) . '" style="width:100%;height:400px;font-family:monospace;">' . esc_textarea($pretty) . '</textarea>';
             echo '<p><button class="button button-primary" name="save_json_data_' . esc_attr($key) . '">Save</button></p>';
             echo '</form>';
         } else {
             echo '<p>No cached data.</p>';
             echo '<form method="post">';
+            wp_nonce_field('stooq_cache_action');
             echo '<textarea name="json_data_' . esc_attr($key) . '" placeholder="Paste JSON here..." style="width:100%;height:300px;font-family:monospace;"></textarea>';
             echo '<p><button class="button button-primary" name="save_json_data_' . esc_attr($key) . '">Save</button></p>';
             echo '</form>';
@@ -156,6 +171,29 @@ function myplugin_render_stooq_cache_page() {
 
         echo '</div>';
     }
+
+    // Log tab
+    echo '<div id="tab-log" class="tab-content" style="display:none;">';
+    $logs = StockDataHelper::getLog();
+    echo '<form method="post" style="margin-bottom:1em;">';
+    wp_nonce_field('stooq_cache_action');
+    echo '<button class="button" name="clear_stooq_log">Clear log</button>';
+    echo '</form>';
+    if (empty($logs)) {
+        echo '<p><em>No log entries.</em></p>';
+    } else {
+        echo '<table class="widefat striped"><thead><tr><th>Time</th><th>Message</th></tr></thead><tbody>';
+        $tz = wp_timezone_string();
+        foreach ($logs as $entry) {
+            $time = wp_date('Y.m.d. H:i:s', $entry['time']) . ' (' . esc_html($tz) . ')';
+            $msg = esc_html($entry['message']);
+            $is_error = (strpos($entry['message'], 'OK') === false);
+            $color = $is_error ? 'color:#d63638;' : 'color:#00a32a;';
+            echo '<tr><td>' . $time . '</td><td style="' . $color . '">' . $msg . '</td></tr>';
+        }
+        echo '</tbody></table>';
+    }
+    echo '</div>';
 
     // JavaScript for tab switching
     echo '

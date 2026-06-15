@@ -2,7 +2,7 @@
 /**
  * Plugin Name: NAVIGATOR Stock rate plugin
  * Description: Shows actual NAVIGATOR rates within a bar at the top of every page
- * Version: 1.2
+ * Version: 1.3
  * Author: Bence Várhidi
  */
 

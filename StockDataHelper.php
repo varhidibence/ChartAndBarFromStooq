@@ -5,6 +5,29 @@ class StockDataHelper {
     const STOOQ_APIKEY = 'ZFdMJhSyi62Tljw81eDKNZuoBrxvcVm7';
     const STOOQ_TICKER = 'navigator.hu';
     const RETRY_AFTER_ERROR = 900; // 15 perc - hiba eseten ennyi ido utan probalkozik ujra
+    const LOG_OPTION_KEY = 'navig_stooq_log';
+    const LOG_MAX_ENTRIES = 50;
+
+    public static function addLog(string $message): void {
+        $logs = get_option(self::LOG_OPTION_KEY, []);
+        if (!is_array($logs)) $logs = [];
+        array_unshift($logs, [
+            'time' => time(),
+            'message' => $message,
+        ]);
+        $logs = array_slice($logs, 0, self::LOG_MAX_ENTRIES);
+        update_option(self::LOG_OPTION_KEY, $logs);
+        error_log('Stooq: ' . $message);
+    }
+
+    public static function clearLog(): void {
+        delete_option(self::LOG_OPTION_KEY);
+    }
+
+    public static function getLog(): array {
+        $logs = get_option(self::LOG_OPTION_KEY, []);
+        return is_array($logs) ? $logs : [];
+    }
     public static function fetchUrl($url): bool|string {
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
@@ -13,7 +36,7 @@ class StockDataHelper {
         curl_setopt($ch, CURLOPT_TIMEOUT, 15);
         $result = curl_exec($ch);
         if (curl_errno($ch)) {
-            error_log("StockDataHelper fetchUrl error: " . curl_error($ch));
+            self::addLog('fetchUrl error: ' . curl_error($ch) . ' — URL: ' . $url);
             return false;
         }
         curl_close($ch);
@@ -116,7 +139,7 @@ class StockDataHelper {
  
         $csv_data = StockDataHelper::fetchUrl($url);
  
-        if (empty($csvData)) {
+        if (empty($csv_data)) {
             return [];
         }
  
@@ -174,7 +197,7 @@ class StockDataHelper {
  
         $csv_data = StockDataHelper::fetchUrl($url);
         if ($csv_data === false) {
-            error_log("StockDataHelper: Nem sikerült lekérni az adatokat. url: {$url}");
+            self::addLog("Fetch failed — URL: {$url}");
             return wp_json_encode([]);
         }
  
@@ -195,7 +218,7 @@ class StockDataHelper {
         $csv_data = StockDataHelper::fetchUrl($url);
  
         if ($csv_data === false) {
-            error_log("StockDataHelper: Nem sikerült lekérni az adatokat. url: {$url}");
+            self::addLog("Fetch failed — URL: {$url}");
             return '';
         }
         
@@ -213,7 +236,7 @@ class StockDataHelper {
  
         $csv_data = StockDataHelper::fetchUrl($url);
         if ($csv_data === false) {
-            error_log("StockDataHelper: Nem sikerült lekérni az adatokat. url: {$url}");
+            self::addLog("Fetch failed — URL: {$url}");
             return wp_json_encode([]);
         }
  
@@ -232,7 +255,7 @@ class StockDataHelper {
         
         $csv_data = StockDataHelper::fetchUrl($url);
         if ($csv_data === false) {
-            error_log("StockDataHelper: Nem sikerült lekérni az adatokat. url: {$url}");
+            self::addLog("Fetch failed — URL: {$url}");
             return wp_json_encode([]);
         }
         $json_data = StockDataHelper::csv_to_json($csv_data);
@@ -251,7 +274,7 @@ class StockDataHelper {
         
         $csv_data = StockDataHelper::fetchUrl($url);
         if ($csv_data === false) {
-            error_log("StockDataHelper: Nem sikerült lekérni az adatokat. url: {$url}");
+            self::addLog("Fetch failed — URL: {$url}");
             return wp_json_encode([]);
         }
         $json_data = StockDataHelper::csv_to_json($csv_data);
@@ -279,7 +302,7 @@ class StockDataHelper {
         $response = $fetch_fn();
 
         if ($response === 'Exceeded the daily hits limit') {
-            error_log('Stooq [' . $label . ']: exceeded the daily hits limit.');
+            self::addLog('[' . $label . '] Exceeded the daily hits limit.');
             update_option($timestamp_key, time() + self::RETRY_AFTER_ERROR);
             return;
         }
@@ -287,13 +310,13 @@ class StockDataHelper {
         $decoded = json_decode($response, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
-            error_log('Stooq [' . $label . ']: invalid JSON returned.');
+            self::addLog('[' . $label . '] Invalid JSON returned.');
             update_option($timestamp_key, time() + self::RETRY_AFTER_ERROR);
             return;
         }
 
         if (empty($decoded)) {
-            error_log('Stooq [' . $label . ']: decoded response is empty, keeping cached data.');
+            self::addLog('[' . $label . '] Empty response, keeping cached data.');
             update_option($timestamp_key, time() + self::RETRY_AFTER_ERROR);
             return;
         }
@@ -301,6 +324,7 @@ class StockDataHelper {
         update_option($cache_key, $response);
         update_option($timestamp_key, time() + $ttl);
         update_option($timestamp_key . '_last', time());
+        self::addLog('[' . $label . '] OK — data refreshed.');
     }
 
     public static function GetCachedYTDData() {
@@ -380,10 +404,11 @@ class StockDataHelper {
             update_option($cache_key, wp_json_encode($response));
             update_option($timestamp_key, time() + $ttl);
             update_option($timestamp_key . '_last', time());
+            self::addLog('[last_price] OK — price: ' . $response['close'] . ', date: ' . ($response['date'] ?? '?'));
             return;
         }
 
-        error_log('Stooq: refreshLastPrice() failed.');
+        self::addLog('[last_price] Failed — no valid price returned.');
         update_option($timestamp_key, time() + self::RETRY_AFTER_ERROR);
     }
  

@@ -2,7 +2,7 @@
 /*
 Plugin Name: NAVIGATOR stock rate chart and informational table plugin
 Description: A plugin that shows a chart with Chart.js, data from Stooq.
-Version: 1.2
+Version: 1.3
 Author: Bence Várhidi
 */
 
@@ -125,8 +125,8 @@ function navigator_huf_chart_shortcode() {
     $lastMonthData = StockDataHelper::GetCachedLastMonthData();
     $lastMonthDataCSV = json_decode($lastMonthData, true);
 
-    if ($lastMonthDataCSV === false){
-        $lastMonthDataCSV = "";
+    if ($lastMonthDataCSV === null){
+        $lastMonthDataCSV = [];
     }
     $lastFive = StockDataHelper::get_last_rows_from_csv($lastMonthDataCSV, 5);
     wp_add_inline_script('chartjs', 'console.log("Last 5 data:", ' . json_encode($lastFive) . ');');
