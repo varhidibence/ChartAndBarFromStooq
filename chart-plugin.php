@@ -1,8 +1,8 @@
 <?php
 /*
 Plugin Name: NAVIGATOR stock rate chart and informational table plugin
-Description: A plugin that shows a chart with Chart.js, data from Stooq.
-Version: 1.3
+Description: A plugin that shows a chart with Chart.js, data from Stooq/BSE.
+Version: 1.4
 Author: Bence Várhidi
 */
 

@@ -9,35 +9,35 @@ function myplugin_render_stooq_cache_page() {
             'label' => 'YTD data',
             'cache_key' => 'navig_stooq_ytd_data',
             'timestamp_key' => 'navig_stooq_ytd_fetch',
-            'refresh_method' => 'refreshYTDData',
+            'refresh_method' => 'refreshAllDataFromBSE',
         ],
         'last_month' => [
             'label' => 'Last month data',
             'cache_key' => 'navig_stooq_last_month_data',
             'timestamp_key' => 'navig_stooq_last_month_fetch',
-            'refresh_method' => 'refreshLastMonthData',
+            'refresh_method' => 'refreshAllDataFromBSE',
         ],
         'last_half_year' => [
             'label' => 'Last half year data',
             'cache_key' => 'navig_stooq_last_half_year_data',
             'timestamp_key' => 'navig_stooq_last_half_year_fetch',
-            'refresh_method' => 'refreshLastSixMonthData',
+            'refresh_method' => 'refreshAllDataFromBSE',
         ],
         'all' => [
-            'label' => 'All data monthly',
+            'label' => 'All data',
             'cache_key' => 'navig_stooq_all_data',
             'timestamp_key' => 'navig_stooq_all_fetch',
-            'refresh_method' => 'refreshAllMonthlyData',
+            'refresh_method' => 'refreshAllDataFromBSE',
         ],
         'last_price' => [
             'label' => 'Last price (15 min cron)',
             'cache_key' => 'navig_stooq_last_price_data',
             'timestamp_key' => 'navig_stooq_last_price_fetch',
-            'refresh_method' => 'refreshLastPrice',
+            'refresh_method' => 'refreshLastPriceFromBSE',
         ],
     ];
 
-    echo '<div class="wrap"><h1>Stooq cache</h1>';
+    echo '<div class="wrap"><h1>Navigator stock cache</h1>';
 
     // Cron statusz
     $tz = wp_timezone_string();
@@ -182,14 +182,15 @@ function myplugin_render_stooq_cache_page() {
     if (empty($logs)) {
         echo '<p><em>No log entries.</em></p>';
     } else {
-        echo '<table class="widefat striped"><thead><tr><th>Time</th><th>Message</th></tr></thead><tbody>';
+        echo '<table class="widefat striped"><thead><tr><th>Time</th><th>Message</th><th>URL</th></tr></thead><tbody>';
         $tz = wp_timezone_string();
         foreach ($logs as $entry) {
             $time = wp_date('Y.m.d. H:i:s', $entry['time']) . ' (' . esc_html($tz) . ')';
             $msg = esc_html($entry['message']);
+            $url = esc_html($entry['url'] ?? '');
             $is_error = (strpos($entry['message'], 'OK') === false);
             $color = $is_error ? 'color:#d63638;' : 'color:#00a32a;';
-            echo '<tr><td>' . $time . '</td><td style="' . $color . '">' . $msg . '</td></tr>';
+            echo '<tr><td>' . $time . '</td><td style="' . $color . '">' . $msg . '</td><td style="font-size:12px;word-break:break-all;">' . $url . '</td></tr>';
         }
         echo '</tbody></table>';
     }
@@ -229,8 +230,8 @@ function myplugin_render_stooq_cache_page() {
 
 add_action('admin_menu', function() {
     add_menu_page(
-        'Stooq cache data',     // Page title (browser tab)
-        'Stooq cache',            // Menu title (left sidebar)
+        'Navigator stock cache',  // Page title (browser tab)
+        'Navigator stock cache',  // Menu title (left sidebar)
         'manage_options',               // Capability
         'stooq-data-cache',             // Menu slug
         'myplugin_render_stooq_cache_page', // Callback

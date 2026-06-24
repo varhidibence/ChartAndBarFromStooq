@@ -8,16 +8,17 @@ class StockDataHelper {
     const LOG_OPTION_KEY = 'navig_stooq_log';
     const LOG_MAX_ENTRIES = 50;
 
-    public static function addLog(string $message): void {
+    public static function addLog(string $message, string $url = ''): void {
         $logs = get_option(self::LOG_OPTION_KEY, []);
         if (!is_array($logs)) $logs = [];
         array_unshift($logs, [
             'time' => time(),
             'message' => $message,
+            'url' => $url,
         ]);
         $logs = array_slice($logs, 0, self::LOG_MAX_ENTRIES);
         update_option(self::LOG_OPTION_KEY, $logs);
-        error_log('Stooq: ' . $message);
+        error_log('Stooq: ' . $message . ($url ? ' — URL: ' . $url : ''));
     }
 
     public static function clearLog(): void {
@@ -37,6 +38,7 @@ class StockDataHelper {
         $result = curl_exec($ch);
         if (curl_errno($ch)) {
             self::addLog('fetchUrl error: ' . curl_error($ch) . ' — URL: ' . $url);
+            curl_close($ch);
             return false;
         }
         curl_close($ch);
@@ -381,19 +383,233 @@ class StockDataHelper {
 
     /**
      * Osszes adat frissitese - ezt hivja a napi WP cron.
+     * BSE.hu-rol tolt, egyetlen lekeressel minden cache-t feltolt.
      */
     public static function refreshAllData(): void {
-        self::refreshYTDData();
-        self::refreshLastMonthData();
-        self::refreshLastSixMonthData();
-        self::refreshAllMonthlyData();
-        self::refreshLastPrice();
+        self::refreshAllDataFromBSE();
     }
 
     /**
      * Csak az utolso ar frissitese - ezt hivja a 15 perces cron.
+     * BSE.hu-rol tolti az aktualis arat.
+     * Hetvegen es tozsde nyitvatartason kivul kihagyja a lekerеs.
      */
     public static function refreshLastPrice(): void {
+        if (!self::isTradingHours()) {
+            return;
+        }
+        self::refreshLastPriceFromBSE();
+    }
+
+    // =========================================================================
+    // BSE.hu adatforras
+    // =========================================================================
+
+    const BSE_SECURITY_ID = '15491'; // Navigator Investments Nyrt.
+    const BSE_PROFILE_URL = 'https://bse.hu/pages/company_profile/$security/NAVIGATOR';
+
+    /**
+     * Ellenorzi, hogy Budapest idozona szerint tozsde nyitvatartasi idoben vagyunk-e.
+     * H-P 8:45 - 18:00 kozott true, egyebkent false.
+     * Kicsit bovebb mint a tényleges 9:00-17:20, hogy a nyitas elotti/utani adatokat is elkapjuk.
+     */
+    public static function isTradingHours(): bool {
+        $now = new \DateTime('now', new \DateTimeZone('Europe/Budapest'));
+        $dayOfWeek = (int) $now->format('N'); // 1=hetfo, 7=vasarnap
+        if ($dayOfWeek > 5) {
+            return false; // hetvege
+        }
+        $hour = (int) $now->format('G');
+        $minute = (int) $now->format('i');
+        $timeMinutes = $hour * 60 + $minute;
+        // 8:45 = 525 perc, 18:00 = 1080 perc
+        return $timeMinutes >= 525 && $timeMinutes <= 1080;
+    }
+
+    /**
+     * BSE.hu company profile oldal letoltese es a SecurityHistoricDataSource
+     * values tomb kinyerese.
+     * Visszaad: [[timestamp_ms, open, high, low, close, value, volume], ...] vagy ures tombot hiba eseten.
+     */
+    public static function fetchBSERawData(): array {
+        $url = self::BSE_PROFILE_URL;
+        $html = self::fetchUrl($url);
+        if ($html === false || strlen($html) < 1000) {
+            self::addLog('[BSE] Fetch failed or empty response.', $url);
+            return [];
+        }
+
+        $needle = 'SecurityHistoricDataSource;securityId=' . self::BSE_SECURITY_ID;
+        $pos = strpos($html, $needle);
+        if ($pos === false) {
+            self::addLog('[BSE] SecurityHistoricDataSource not found in HTML.', $url);
+            return [];
+        }
+
+        // Megkeressuk a "values": [ ... ]] reszt
+        $valuesPos = strpos($html, '"values":', $pos);
+        if ($valuesPos === false) {
+            self::addLog('[BSE] "values" key not found.', $url);
+            return [];
+        }
+
+        // A values tomb kezdete es vege
+        $arrayStart = strpos($html, '[[', $valuesPos);
+        $arrayEnd = strpos($html, ']]', $arrayStart);
+        if ($arrayStart === false || $arrayEnd === false) {
+            self::addLog('[BSE] Could not find values array boundaries.', $url);
+            return [];
+        }
+
+        $valuesJson = substr($html, $arrayStart, $arrayEnd - $arrayStart + 2);
+        $values = json_decode($valuesJson, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE || empty($values)) {
+            self::addLog('[BSE] JSON parse error: ' . json_last_error_msg(), $url);
+            return [];
+        }
+
+        return $values;
+    }
+
+    /**
+     * BSE raw values tombot alakit at a frontend altal vart formatumra.
+     * Opcionalis $fromDate (Y-m-d) szures.
+     * Visszaad JSON stringet: [{"Date":"2026-06-15","Open":"104","High":"104","Low":"104","Close":"104","Volume":"4500"}, ...]
+     */
+    public static function bseValuesToJson(array $values, ?string $fromDate = null): string {
+        $budapest = new \DateTimeZone('Europe/Budapest');
+        $data = [];
+        foreach ($values as $row) {
+            if (count($row) < 7) continue;
+
+            $dt = (new \DateTime('@' . (int)($row[0] / 1000)))->setTimezone($budapest);
+            $date = $dt->format('Y-m-d');
+
+            if ($fromDate !== null && $date < $fromDate) {
+                continue;
+            }
+
+            $data[] = [
+                'Date'   => $date,
+                'Open'   => (string)$row[1],
+                'High'   => (string)$row[2],
+                'Low'    => (string)$row[3],
+                'Close'  => (string)$row[4],
+                'Volume' => (string)round($row[6]),
+            ];
+        }
+
+        return wp_json_encode($data);
+    }
+
+    /**
+     * Egyetlen BSE.hu lekeresbol feltolti az osszes cache-t (last_month, half_year, ytd, all, last_price).
+     */
+    public static function refreshAllDataFromBSE(): void {
+        $values = self::fetchBSERawData();
+        $url = self::BSE_PROFILE_URL;
+
+        if (empty($values)) {
+            self::addLog('[BSE] refreshAllDataFromBSE — no data, skipping.', $url);
+            return;
+        }
+
+        $now = time();
+
+        // Datumhatarok
+        $oneMonthAgo  = date('Y-m-d', strtotime('-1 month'));
+        $sixMonthsAgo = date('Y-m-d', strtotime('-6 months'));
+        $oneYearAgo   = date('Y-m-d', strtotime('-1 year'));
+
+        $sets = [
+            ['navig_stooq_last_month_data',    'navig_stooq_last_month_fetch',    $oneMonthAgo,  'last_month'],
+            ['navig_stooq_last_half_year_data', 'navig_stooq_last_half_year_fetch', $sixMonthsAgo, 'last_half_year'],
+            ['navig_stooq_ytd_data',           'navig_stooq_ytd_fetch',           $oneYearAgo,   'YTD'],
+            ['navig_stooq_all_data',           'navig_stooq_all_fetch',           null,          'all'],
+        ];
+
+        foreach ($sets as [$cacheKey, $tsKey, $fromDate, $label]) {
+            $json = self::bseValuesToJson($values, $fromDate);
+            $decoded = json_decode($json, true);
+            if (!empty($decoded)) {
+                update_option($cacheKey, $json);
+                update_option($tsKey, $now + DAY_IN_SECONDS);
+                update_option($tsKey . '_last', $now);
+                self::addLog('[BSE][' . $label . '] OK — ' . count($decoded) . ' rows.', $url);
+            } else {
+                self::addLog('[BSE][' . $label . '] Empty after filtering.', $url);
+            }
+        }
+
+        // Last price: IntraDayDataSource-bol (pontos aktualis ar)
+        self::refreshLastPriceFromBSE();
+    }
+
+    /**
+     * Csak az utolso ar frissitese BSE.hu-rol.
+     * Az IntraDayDataSource-bol veszi az aktualis arat.
+     */
+    public static function refreshLastPriceFromBSE(): void {
+        $url = self::BSE_PROFILE_URL;
+        $html = self::fetchUrl($url);
+        if ($html === false || strlen($html) < 1000) {
+            self::addLog('[BSE][last_price] Fetch failed.', $url);
+            update_option('navig_stooq_last_price_fetch', time() + self::RETRY_AFTER_ERROR);
+            return;
+        }
+
+        $needle = 'SecurityIntraDayDataSource;infoBar=true;securityId=' . self::BSE_SECURITY_ID;
+        $pos = strpos($html, $needle);
+        if ($pos === false) {
+            self::addLog('[BSE][last_price] IntraDayDataSource not found.', $url);
+            update_option('navig_stooq_last_price_fetch', time() + self::RETRY_AFTER_ERROR);
+            return;
+        }
+
+        // lastClosePrice, changValue es dateTime kinyerese
+        $chunk = substr($html, $pos, 500);
+
+        if (!preg_match('/"lastClosePrice":([\d.]+)/', $chunk, $priceMatch) ||
+            !preg_match('/"dateTime":(\d+)/', $chunk, $dateMatch)) {
+            self::addLog('[BSE][last_price] Could not parse price/date from IntraDayDataSource.', $url);
+            update_option('navig_stooq_last_price_fetch', time() + self::RETRY_AFTER_ERROR);
+            return;
+        }
+
+        $lastClose = (float)$priceMatch[1];
+        $change = 0.0;
+        if (preg_match('/"changValue":([-\d.]+)/', $chunk, $changeMatch)) {
+            $change = (float)$changeMatch[1];
+        }
+        $price = $lastClose + $change;
+        $timestamp = (int)($dateMatch[1] / 1000);
+
+        if ($price <= 0) {
+            self::addLog('[BSE][last_price] Invalid price: ' . $price, $url);
+            update_option('navig_stooq_last_price_fetch', time() + self::RETRY_AFTER_ERROR);
+            return;
+        }
+
+        $budapest = new \DateTimeZone('Europe/Budapest');
+        $dt = (new \DateTime('@' . $timestamp))->setTimezone($budapest);
+        $lastPrice = [
+            'date'  => $dt->format('Y-m-d'),
+            'time'  => $dt->format('H:i:s'),
+            'close' => $price,
+        ];
+
+        update_option('navig_stooq_last_price_data', wp_json_encode($lastPrice));
+        update_option('navig_stooq_last_price_fetch', time() + 900);
+        update_option('navig_stooq_last_price_fetch_last', time());
+        self::addLog('[BSE][last_price] OK — price: ' . $price . ', date: ' . $lastPrice['date'], $url);
+    }
+
+    // =========================================================================
+    // Stooq adatforras (regi, jelenleg nem hasznalt — bot-vedelem blokkolja)
+    // =========================================================================
+
+    public static function refreshLastPrice_Stooq(): void {
         $cache_key = 'navig_stooq_last_price_data';
         $timestamp_key = 'navig_stooq_last_price_fetch';
         $ttl = 900;
@@ -411,5 +627,13 @@ class StockDataHelper {
         self::addLog('[last_price] Failed — no valid price returned.');
         update_option($timestamp_key, time() + self::RETRY_AFTER_ERROR);
     }
- 
+
+    public static function refreshAllData_Stooq(): void {
+        self::refreshYTDData();
+        self::refreshLastMonthData();
+        self::refreshLastSixMonthData();
+        self::refreshAllMonthlyData();
+        self::refreshLastPrice_Stooq();
+    }
+
 }
