@@ -51,6 +51,8 @@ function myplugin_render_stooq_cache_page() {
     echo '<p><strong>Last price refresh (every 15 min):</strong> ';
     echo $next_price ? wp_date('Y.m.d. H:i:s', $next_price) . ' (' . esc_html($tz) . ')' : '<em>Not scheduled</em>';
     echo '</p>';
+    $trading = StockDataHelper::isTradingHours();
+    echo '<p><strong>Trading hours (H-P 8:45–18:00 Budapest):</strong> ' . ($trading ? '<span style="color:#00a32a;">Active</span>' : '<span style="color:#d63638;">Closed</span> — last price cron skipped') . '</p>';
     echo '</div>';
 
     foreach ($datasets as $key => $info) {
