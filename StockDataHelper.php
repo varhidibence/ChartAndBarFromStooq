@@ -567,12 +567,11 @@ class StockDataHelper {
             return;
         }
 
-        // lastClosePrice, changValue es dateTime kinyerese
+        // lastClosePrice, changValue kinyerese az IntraDayDataSource-bol
         $chunk = substr($html, $pos, 500);
 
-        if (!preg_match('/"lastClosePrice":([\d.]+)/', $chunk, $priceMatch) ||
-            !preg_match('/"dateTime":(\d+)/', $chunk, $dateMatch)) {
-            self::addLog('[BSE][last_price] Could not parse price/date from IntraDayDataSource.', $url);
+        if (!preg_match('/"lastClosePrice":([\d.]+)/', $chunk, $priceMatch)) {
+            self::addLog('[BSE][last_price] Could not parse price from IntraDayDataSource.', $url);
             update_option('navig_stooq_last_price_fetch', time() + self::RETRY_AFTER_ERROR);
             return;
         }
@@ -583,7 +582,37 @@ class StockDataHelper {
             $change = (float)$changeMatch[1];
         }
         $price = $lastClose + $change;
-        $timestamp = (int)($dateMatch[1] / 1000);
+
+        // Az utolso kereskedes pontos idopontjat a Security1IntradayHistoricalDataSource-bol vesszuk,
+        // mert az IntraDayDataSource dateTime mezoje csak a nap ejfelet adja (00:00:00).
+        $timestamp = null;
+        $intradayNeedle = 'Security1IntradayHistoricalDataSource;securityId=' . self::BSE_SECURITY_ID;
+        $intradayPos = strpos($html, $intradayNeedle);
+        if ($intradayPos !== false) {
+            // Csak a "values":[...] tombot keressuk ki, ne folyjunk at a kovetkezo adatforrasba
+            $valuesStart = strpos($html, '"values":[', $intradayPos);
+            if ($valuesStart !== false) {
+                // A "flags" kulcs jelzi a values tomb veget ebben a JSON objektumban
+                $valuesEnd = strpos($html, ',"flags"', $valuesStart);
+                if ($valuesEnd !== false) {
+                    $valuesStr = substr($html, $valuesStart, $valuesEnd - $valuesStart);
+                    // Az utolso [timestamp, ...] bejegyzes timestampje
+                    if (preg_match_all('/\[(\d{13,}),/', $valuesStr, $tsMatches)) {
+                        $lastTs = end($tsMatches[1]);
+                        $timestamp = (int)($lastTs / 1000);
+                    }
+                }
+            }
+        }
+
+        // Fallback: IntraDayDataSource dateTime (ejfel, de jobb mint semmi)
+        if ($timestamp === null) {
+            if (preg_match('/"dateTime":(\d+)/', $chunk, $dateMatch)) {
+                $timestamp = (int)($dateMatch[1] / 1000);
+            } else {
+                $timestamp = time();
+            }
+        }
 
         if ($price <= 0) {
             self::addLog('[BSE][last_price] Invalid price: ' . $price, $url);
@@ -602,7 +631,7 @@ class StockDataHelper {
         update_option('navig_stooq_last_price_data', wp_json_encode($lastPrice));
         update_option('navig_stooq_last_price_fetch', time() + 900);
         update_option('navig_stooq_last_price_fetch_last', time());
-        self::addLog('[BSE][last_price] OK — price: ' . $price . ', date: ' . $lastPrice['date'], $url);
+        self::addLog('[BSE][last_price] OK — price: ' . $price . ', date: ' . $lastPrice['date'] . ' ' . $lastPrice['time'], $url);
     }
 
     // =========================================================================
